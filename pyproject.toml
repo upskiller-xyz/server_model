@@ -1,0 +1,59 @@
+[tool.poetry]
+name = "Upskiller-torch"
+version = "0.1.0"
+description = "case study for RTE RFQ process"
+authors = ["alberto floris <alberto.floris@arkion.co>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.13"
+torch = { source = "torch-cu128", version = "2.7.1" }
+torchvision = { source = "torch-cu128" }
+pytorch-lightning = {extras = ["extra"], version = "^2.5.2"}
+rich = "14.0.0"
+setuptools = "66.1.1"
+tensorboardx = "^2.6.4"
+opencv-python = "^4.12.0.88"
+tensorboard = "^2.20.0"
+timm = "^1.0.19"
+flask = "^3.0.0"
+werkzeug = "^3.0.0"
+requests = "^2.32.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "8.3.4"
+coverage = "6.5.0"
+pyfakefs = "5.7.4"
+mypy = "1.14.0"
+ruff = "0.9.4"
+pre-commit = "3.5.0"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "1.6.1"
+mkdocstrings-python = "1.10.9"
+
+
+[tool.poetry.scripts]
+
+
+[[tool.poetry.source]]
+name = "torch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+priority = "explicit"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+disable_error_code = ["import-untyped", "no-any-return"]
+explicit_package_bases = true
+
+[tool.ruff]
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["Upskiller-torch"]
