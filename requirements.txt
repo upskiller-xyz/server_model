@@ -1,29 +1,24 @@
-# PyTorch and related packages (CUDA 12.8)
---extra-index-url https://download.pytorch.org/whl/cu128
-torch==2.7.1
-torchvision
-
-# Deep Learning Framework
-pytorch-lightning[extra]>=2.5.2
-
-# Utilities
-rich==14.0.0
-setuptools==66.1.1
-
-# Visualization and Monitoring
-tensorboardx>=2.6.4
-tensorboard>=2.20.0
-
-# Computer Vision
-opencv-python>=4.12.0.88
-
-# Model Libraries
-timm>=1.0.19
+# ONNX Runtime (GPU support)
+onnxruntime-gpu>=1.20.1
 
 # Web Framework
 flask>=3.0.0
+flask-cors>=4.0.0
 werkzeug>=3.0.0
 gunicorn>=20.1.0
 
 # HTTP Client
 requests>=2.32.0
+
+# Image Processing
+Pillow>=10.0.0
+opencv-python>=4.12.0.88
+
+# NumPy (required by ONNX Runtime)
+numpy>=1.24.0
+
+# PyTorch (for TorchScript model support)
+torch>=2.0.0
+
+# Utilities
+rich>=14.0.0

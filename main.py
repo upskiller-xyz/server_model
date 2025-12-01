@@ -1,4 +1,3 @@
-import os
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import BadRequest
 from typing import Dict, Any
@@ -29,17 +28,19 @@ class ModelServerApplication:
         # Download strategy
         download_strategy = HTTPDownloadStrategy(logger)
 
-        # Get model name from environment variable
-        model_name = os.getenv("MODEL", "df_default_2.0.0")
+        # Model configuration (hardcoded)
+        model_name = "df_default_2.0.1"
+        model_format = "onnx"
+        extension = "onnx"
 
-        # Model loader
+        # Create model loader
+        logger.info(f"Creating ONNX model loader for {model_name}")
         model_loader = ModelLoaderFactory.create_loader(
-            "glp",
-            checkpoint_url=f"https://daylight-factor.s3.fr-par.scw.cloud/models/{model_name}.ckpt",
-            local_path=f"./checkpoints/{model_name}.ckpt",
+            model_format,
+            model_url=f"https://daylight-factor.s3.fr-par.scw.cloud/models/{model_name}.{extension}",
+            local_path=f"./checkpoints/{model_name}.{extension}",
             download_strategy=download_strategy,
-            logger=logger,
-            batch_size=1
+            logger=logger
         )
 
         # Image processor
@@ -124,6 +125,10 @@ def main() -> None:
     application = launcher.create_application()
     launcher.run_server(application)
 
+
+# Create application instance for gunicorn
+application = ModelServerApplication()
+app = application.app
 
 if __name__ == "__main__":
     main()

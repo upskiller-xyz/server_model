@@ -1,12 +1,10 @@
-import torch
 import numpy as np
 from typing import Dict, Any
 from ..interfaces import IPredictionService, IModelLoader, IImageProcessor, ILogger
-from ..enums import ModelStatus
 
 
 class ModelPredictionService(IPredictionService):
-    """Service for making model predictions"""
+    """Service for making model predictions (ONNX or TorchScript)"""
 
     def __init__(
         self,
@@ -17,35 +15,49 @@ class ModelPredictionService(IPredictionService):
         self._model_loader = model_loader
         self._image_processor = image_processor
         self._logger = logger
-        self._model: torch.nn.Module = None
-        self._device: torch.device = None
+        self._model = None
 
     def _ensure_model_loaded(self) -> None:
         """Ensure model is loaded and ready"""
         if self._model is None:
             self._logger.info("Loading model for first prediction")
             self._model = self._model_loader.load()
-            self._device = next(self._model.parameters()).device
 
     def predict(self, image_bytes: bytes) -> Dict[str, Any]:
-        """Make prediction on image bytes"""
+        """
+        Make prediction on image bytes using the loaded model.
+
+        Args:
+            image_bytes: Raw image bytes from HTTP upload
+
+        Returns:
+            Dict containing:
+                - prediction: 2D list of predicted values [H, W]
+                - shape: List [height, width] of prediction
+                - status: "success" or "error"
+                - error: Error message (only if status is "error")
+        """
         try:
             self._ensure_model_loaded()
 
-            # Preprocess image
-            image_tensor = self._image_processor.preprocess(image_bytes)
-            image_tensor = image_tensor.to(self._device)
+            # Preprocess image (returns numpy array)
+            image_np = self._image_processor.preprocess(image_bytes)
+
+            # Log input statistics
+            self._logger.info(f"Input tensor shape: {image_np.shape}, dtype: {image_np.dtype}")
+            self._logger.info(f"Input tensor - min: {image_np.min():.6f}, max: {image_np.max():.6f}, mean: {image_np.mean():.6f}")
 
             # Make prediction
-            self._logger.debug("Running model inference")
-            with torch.no_grad():
-                output = self._model(image_tensor)
+            self._logger.debug(f"Running model inference")
+            output = self._model(image_np)
 
-            # Process output
-            output_np = output.cpu().numpy().squeeze()
+            # Process output: squeeze and scale by 255
+            output_np = output.squeeze() * 255
             output_list = output_np.tolist()
 
-            self._logger.debug(f"Prediction completed, output shape: {output_np.shape}")
+            # Log output statistics
+            self._logger.info(f"Output tensor shape: {output_np.shape}")
+            self._logger.info(f"Output tensor (scaled) - min: {output_np.min():.6f}, max: {output_np.max():.6f}, mean: {output_np.mean():.6f}")
 
             return {
                 "prediction": output_list,

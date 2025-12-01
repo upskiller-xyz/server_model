@@ -2,23 +2,22 @@
 name = "Upskiller-torch"
 version = "0.1.0"
 description = "case study for RTE RFQ process"
-authors = ["alberto floris <alberto.floris@arkion.co>"]
+authors = ["stasja <0.0stasya@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.13"
 torch = { source = "torch-cu128", version = "2.7.1" }
 torchvision = { source = "torch-cu128" }
-pytorch-lightning = {extras = ["extra"], version = "^2.5.2"}
 rich = "14.0.0"
-setuptools = "66.1.1"
-tensorboardx = "^2.6.4"
 opencv-python = "^4.12.0.88"
-tensorboard = "^2.20.0"
-timm = "^1.0.19"
 flask = "^3.0.0"
 werkzeug = "^3.0.0"
 requests = "^2.32.0"
+onnxruntime-gpu = "^1.20.1"
+Pillow = "^10.0.0"
+numpy = "^1.24.0"
+gunicorn = "^20.1.0"
 
 
 [tool.poetry.group.dev.dependencies]
