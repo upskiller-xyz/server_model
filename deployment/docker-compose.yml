@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  server-model:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: server-model
+    restart: unless-stopped
+    ports:
+      - "8083:8083"  # Map host port 8083 to container port 8083
+    environment:
+      - PORT=8083
+      - MODEL=${MODEL:-df_default_2.0.1}
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    env_file:
+      - .env.docker
+    volumes:
+      # Optional: Mount checkpoints directory for model persistence
+      - model-cache:/app/checkpoints
+      # Optional: Mount logs directory for persistence
+      - ./logs:/var/log/server-model
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8083/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - model-network
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: model-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
+      # Optional: SSL certificates
+      # - ./ssl/cert.pem:/etc/nginx/ssl/cert.pem:ro
+      # - ./ssl/key.pem:/etc/nginx/ssl/key.pem:ro
+    depends_on:
+      - server-model
+    networks:
+      - model-network
+    profiles:
+      - with-nginx
+
+networks:
+  model-network:
+    driver: bridge
+
+volumes:
+  model-cache:
