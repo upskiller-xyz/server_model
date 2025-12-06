@@ -199,7 +199,7 @@ console.log(result);
 **Response Fields:**
 - `prediction` (array): 2D array of prediction values with shape `[384, 384]`
   - Each value is a float representing the model's prediction for that pixel
-  - Typical range: `[0.0, 10.0]` (model-dependent)
+  - Range: `[0.0, ~10.0]` (raw model output scaled by 255)
 - `shape` (array): Dimensions of the prediction `[height, width]`
 - `status` (string): `"success"` for successful predictions
 

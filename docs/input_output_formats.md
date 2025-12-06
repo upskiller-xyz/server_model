@@ -183,10 +183,10 @@ session = ort.InferenceSession("df_default_2.0.1.onnx")
 input_name = session.get_inputs()[0].name
 output = session.run(None, {input_name: img})[0]
 
-# Postprocess
-prediction = output.squeeze()
+# Postprocess: scale to [0, 10] range
+prediction = output.squeeze() * 255
 print(f"Shape: {prediction.shape}")
-print(f"Range: [{prediction.min():.3f}, {prediction.max():.3f}]")
+print(f"Range: [{prediction.min():.2f}, {prediction.max():.2f}]")
 ```
 
 ---
@@ -201,8 +201,9 @@ print(f"Range: [{prediction.min():.3f}, {prediction.max():.3f}]")
 | After normalize | `[H, W, 3]` | `float32` | `[-1, 1]` |
 | After resize | `[384, 384, 3]` | `float32` | `[-1, 1]` |
 | **Model input** | `[1, 3, 384, 384]` | `float32` | `[-1, 1]` |
-| **Model output** | `[1, 1, 384, 384]` | `float32` | Model-specific |
-| JSON response | `[384, 384]` | List of floats | Model-specific |
+| **Model output (raw)** | `[1, 1, 384, 384]` | `float32` | `[0, ~0.04]` |
+| **Server output (×255)** | `[384, 384]` | `float32` | `[0, ~10]` |
+| JSON response | `[384, 384]` | List of floats | `[0, ~10]` |
 
 ### Preprocessing Steps
 
