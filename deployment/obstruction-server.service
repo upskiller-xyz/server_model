@@ -1,0 +1,40 @@
+[Unit]
+Description=Obstruction Server - Calculate horizon and zenith obstruction angles
+After=network.target
+
+[Service]
+Type=simple
+User=obstruction
+Group=obstruction
+WorkingDirectory=/opt/obstruction-server
+Environment="PATH=/opt/obstruction-server/venv/bin"
+Environment="PORT=8081"
+EnvironmentFile=/opt/obstruction-server/.env
+ExecStart=/opt/obstruction-server/venv/bin/gunicorn \
+    --bind 0.0.0.0:${PORT} \
+    --workers ${WORKERS} \
+    --threads ${THREADS} \
+    --timeout ${TIMEOUT} \
+    --access-logfile /var/log/obstruction-server/access.log \
+    --error-logfile /var/log/obstruction-server/error.log \
+    --log-level ${GUNICORN_LOG_LEVEL} \
+    --chdir /opt/obstruction-server/src \
+    main:app
+
+# Restart policy
+Restart=always
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/obstruction-server
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target
