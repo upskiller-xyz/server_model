@@ -17,8 +17,10 @@ WORKDIR /app
 # Copy requirements first for better Docker cache
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Upgrade pip and install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/
@@ -32,7 +34,7 @@ RUN chmod 444 main.py
 RUN chmod 444 requirements.txt
 
 # Environment variables
-ENV PORT=8000
+ENV PORT=8083
 ENV MODEL=df_default_2.0.1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app

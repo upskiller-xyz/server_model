@@ -1,5 +1,5 @@
-# ONNX Runtime (GPU support)
-onnxruntime-gpu>=1.20.1
+# ONNX Runtime (CPU support for Docker)
+onnxruntime>=1.20.1
 
 # Web Framework
 flask>=3.0.0
