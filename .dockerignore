@@ -1,0 +1,84 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+dist
+build
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+example/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Export scripts (not needed in production)
+export_*.sh
+export_*.py
+
+# Model files (download at runtime)
+*.ckpt
+*.pth
+*.onnx
+checkpoints/
+
+# Temporary files
+*.log
+*.tmp
+/tmp/
+
+# Poetry/Lock files
+poetry.lock
+pyproject.toml
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Build and deployment scripts
+build.sh
+build_scw.sh
+imagebuild.yaml
+
+# Environment files
+.env
+.env.example
+.gcloudignore
+
+# Claude AI
+.claude/
+CLAUDE.md
+
+# Test files
+test_*.py
+
+# Unnecessary source modules (not used in production server)
+src/metrics/
+src/utils/viz.py

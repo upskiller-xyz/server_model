@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  model-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: upskiller-model-server:latest
+    container_name: upskiller-model-server
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL=${MODEL:-df_default_2.0.1}
+      - PORT=8000
+    volumes:
+      # Cache downloaded models between restarts
+      - ./checkpoints:/app/checkpoints
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Optional: GPU-enabled version
+  model-server-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: upskiller-model-server:latest
+    container_name: upskiller-model-server-gpu
+    ports:
+      - "8001:8000"
+    environment:
+      - MODEL=${MODEL:-df_default_2.0.1}
+      - PORT=8000
+    volumes:
+      - ./checkpoints:/app/checkpoints
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles:
+      - gpu

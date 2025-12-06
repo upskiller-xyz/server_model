@@ -1,0 +1,1 @@
+This work uses the Daylight Factor Model Server (Fedorova et al., 2025), developed by BIMTech Innovations AB (Upskiller-xyz), available under the GNU GPL-3.0 license at github.com/upskiller-xyz/server_model.

@@ -1,0 +1,11 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', '${_GCP_REGION}-docker.pkg.dev/${_SERVER_NAME}/${_REPO_NAME}/${_IMAGE_NAME}:${_DAYLIGHT_SERVER_VERSION}', '.']
+substitutions:
+  _DAYLIGHT_SERVER_VERSION: $DAYLIGHT_SERVER_VERSION 
+  _SERVER_NAME: $SERVER_NAME
+  _GCP_REGION: $GCP_REGION
+  _REPO_NAME: $REPO_NAME
+  _IMAGE_NAME: $IMAGE_NAME
+images:
+- '${_GCP_REGION}-docker.pkg.dev/${_SERVER_NAME}/${_REPO_NAME}/${_IMAGE_NAME}'

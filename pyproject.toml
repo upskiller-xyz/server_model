@@ -1,0 +1,58 @@
+[tool.poetry]
+name = "Upskiller-torch"
+version = "0.1.0"
+description = "case study for RTE RFQ process"
+authors = ["stasja <0.0stasya@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.13"
+torch = { source = "torch-cu128", version = "2.7.1" }
+torchvision = { source = "torch-cu128" }
+rich = "14.0.0"
+opencv-python = "^4.12.0.88"
+flask = "^3.0.0"
+werkzeug = "^3.0.0"
+requests = "^2.32.0"
+onnxruntime-gpu = "^1.20.1"
+Pillow = "^10.0.0"
+numpy = "^1.24.0"
+gunicorn = "^20.1.0"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "8.3.4"
+coverage = "6.5.0"
+pyfakefs = "5.7.4"
+mypy = "1.14.0"
+ruff = "0.9.4"
+pre-commit = "3.5.0"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "1.6.1"
+mkdocstrings-python = "1.10.9"
+
+
+[tool.poetry.scripts]
+
+
+[[tool.poetry.source]]
+name = "torch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+priority = "explicit"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.mypy]
+disable_error_code = ["import-untyped", "no-any-return"]
+explicit_package_bases = true
+
+[tool.ruff]
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["Upskiller-torch"]
