@@ -7,7 +7,7 @@ from src.server.services.logging import StructuredLogger
 from src.server.services.download import HTTPDownloadStrategy
 from src.server.services.model_loader import ModelLoaderFactory
 from src.server.services.image_processor import ImageProcessorFactory
-from src.server.services.simulation import PredictionServiceFactory
+from src.server.services.simulation import SimulationServiceFactory
 from src.server.enums import LogLevel, ContentType, HTTPStatus
 
 
@@ -46,8 +46,8 @@ class ModelServerApplication:
         # Image processor
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
-        # Prediction service
-        simulation_service = PredictionServiceFactory.create_model_simulation_service(
+        # Simulation service
+        simulation_service = SimulationServiceFactory.create_model_simulation_service(
             model_loader=model_loader,
             image_processor=image_processor,
             logger=logger
@@ -97,7 +97,7 @@ class ModelServerApplication:
             return jsonify(result)
 
         except Exception as e:
-            return jsonify({"error": f"Prediction failed: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
+            return jsonify({"error": f"Simulation failed: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
 
     @property
     def app(self) -> Flask:

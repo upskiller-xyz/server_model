@@ -9,7 +9,7 @@ This document describes the REST API endpoints for the Upskiller Model Server.
 2. [Server Configuration](#server-configuration)
 3. [API Endpoints](#api-endpoints)
    - [GET / - Health Check](#get---health-check)
-   - [POST /run - Run Prediction](#post-run---run-simulation)
+   - [POST /run - Run Simulation](#post-run---run-simulation)
 4. [Error Handling](#error-handling)
 5. [Usage Examples](#usage-examples)
 
@@ -110,7 +110,7 @@ console.log(`Status: ${data.status}`);
 
 ---
 
-### POST `/run` - Run Prediction
+### POST `/run` - Run Simulation
 
 Processes an uploaded image and returns model simulations.
 

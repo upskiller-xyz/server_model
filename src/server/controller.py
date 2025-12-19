@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from .interfaces import IServerController, IPredictionService, ILogger
+from .interfaces import IServerController, ISimulationService, ILogger
 from .enums import ServerStatus, HTTPStatus
 
 
@@ -8,7 +8,7 @@ class ModelServerController(IServerController):
 
     def __init__(
         self,
-        simulation_service: IPredictionService,
+        simulation_service: ISimulationService,
         logger: ILogger,
         name: str = "Upskiller Model Server",
         version: str = "2.0.0"
@@ -42,11 +42,11 @@ class ModelServerController(IServerController):
         """Handle simulation request"""
         try:
             self._logger.info("Processing simulation request")
-            result = self._simulation_service.predict(image_bytes)
-            self._logger.info("Prediction request completed successfully")
+            result = self._simulation_service.simulate(image_bytes)
+            self._logger.info("Simulation request completed successfully")
             return result
         except Exception as e:
-            self._logger.error(f"Prediction request failed: {str(e)}")
+            self._logger.error(f"Simulation request failed: {str(e)}")
             return {
                 "simulation": None,
                 "shape": None,

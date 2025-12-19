@@ -1,9 +1,9 @@
 import numpy as np
 from typing import Dict, Any
-from ..interfaces import IPredictionService, IModelLoader, IImageProcessor, ILogger
+from ..interfaces import ISimulationService, IModelLoader, IImageProcessor, ILogger
 
 
-class ModelPredictionService(IPredictionService):
+class ModelSimulationService(ISimulationService):
     """Service for making model simulations (ONNX or TorchScript)"""
 
     def __init__(
@@ -23,7 +23,7 @@ class ModelPredictionService(IPredictionService):
             self._logger.info("Loading model for first simulation")
             self._model = self._model_loader.load()
 
-    def predict(self, image_bytes: bytes) -> Dict[str, Any]:
+    def simulate(self, image_bytes: bytes) -> Dict[str, Any]:
         """
         Make simulation on image bytes using the loaded model.
 
@@ -32,7 +32,7 @@ class ModelPredictionService(IPredictionService):
 
         Returns:
             Dict containing:
-                - simulation: 2D list of predicted values [H, W]
+                - simulation: 2D list of simulateed values [H, W]
                 - shape: List [height, width] of simulation
                 - status: "success" or "error"
                 - error: Error message (only if status is "error")
@@ -66,7 +66,7 @@ class ModelPredictionService(IPredictionService):
             }
 
         except Exception as e:
-            self._logger.error(f"Prediction failed: {str(e)}")
+            self._logger.error(f"Simulation failed: {str(e)}")
             return {
                 "simulation": None,
                 "shape": None,
@@ -75,7 +75,7 @@ class ModelPredictionService(IPredictionService):
             }
 
 
-class PredictionServiceFactory:
+class SimulationServiceFactory:
     """Factory for creating simulation services"""
 
     @staticmethod
@@ -83,9 +83,9 @@ class PredictionServiceFactory:
         model_loader: IModelLoader,
         image_processor: IImageProcessor,
         logger: ILogger
-    ) -> IPredictionService:
+    ) -> ISimulationService:
         """Create model-based simulation service"""
-        return ModelPredictionService(
+        return ModelSimulationService(
             model_loader=model_loader,
             image_processor=image_processor,
             logger=logger

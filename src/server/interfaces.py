@@ -52,11 +52,11 @@ class ILogger(ABC):
         pass
 
 
-class IPredictionService(ABC):
+class ISimulationService(ABC):
     """Interface for simulation services"""
 
     @abstractmethod
-    def predict(self, image_bytes: bytes) -> Dict[str, Any]:
+    def simulate(self, image_bytes: bytes) -> Dict[str, Any]:
         """Make simulation on image and return result"""
         pass
 

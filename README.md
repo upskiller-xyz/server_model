@@ -57,7 +57,7 @@ GET /
 }
 ```
 
-### Run Prediction
+### Run Simulation
 ```bash
 POST /run
 Content-Type: multipart/form-data
