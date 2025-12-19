@@ -8,12 +8,12 @@ class ModelServerController(IServerController):
 
     def __init__(
         self,
-        prediction_service: IPredictionService,
+        simulation_service: IPredictionService,
         logger: ILogger,
         name: str = "Upskiller Model Server",
         version: str = "2.0.0"
     ):
-        self._prediction_service = prediction_service
+        self._simulation_service = simulation_service
         self._logger = logger
         self._name = name
         self._version = version
@@ -38,17 +38,17 @@ class ModelServerController(IServerController):
             "status": self._status.value
         }
 
-    def handle_prediction_request(self, image_bytes: bytes) -> Dict[str, Any]:
-        """Handle prediction request"""
+    def handle_simulation_request(self, image_bytes: bytes) -> Dict[str, Any]:
+        """Handle simulation request"""
         try:
-            self._logger.info("Processing prediction request")
-            result = self._prediction_service.predict(image_bytes)
+            self._logger.info("Processing simulation request")
+            result = self._simulation_service.predict(image_bytes)
             self._logger.info("Prediction request completed successfully")
             return result
         except Exception as e:
             self._logger.error(f"Prediction request failed: {str(e)}")
             return {
-                "prediction": None,
+                "simulation": None,
                 "shape": None,
                 "status": "error",
                 "error": str(e)

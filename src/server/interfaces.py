@@ -53,11 +53,11 @@ class ILogger(ABC):
 
 
 class IPredictionService(ABC):
-    """Interface for prediction services"""
+    """Interface for simulation services"""
 
     @abstractmethod
     def predict(self, image_bytes: bytes) -> Dict[str, Any]:
-        """Make prediction on image and return result"""
+        """Make simulation on image and return result"""
         pass
 
 

@@ -27,7 +27,7 @@ Technical specification for the Upskiller Model Server data formats.
 **Success (200):**
 ```json
 {
-  "prediction": [[0.123, 0.456, ...], ...],
+  "simulation": [[0.123, 0.456, ...], ...],
   "shape": [384, 384],
   "status": "success"
 }
@@ -36,7 +36,7 @@ Technical specification for the Upskiller Model Server data formats.
 **Error (400/500):**
 ```json
 {
-  "prediction": null,
+  "simulation": null,
   "shape": null,
   "status": "error",
   "error": "Error message"
@@ -119,15 +119,15 @@ Model output is scaled and converted to JSON response:
 output = model(input_tensor)
 
 # Remove batch/channel dimensions and scale to [0, 10]
-prediction = output.squeeze() * 255  # Shape: [384, 384], range ~[0, 10]
+simulation = output.squeeze() * 255  # Shape: [384, 384], range ~[0, 10]
 
 # Convert to list for JSON
-prediction_list = prediction.tolist()
+simulation_list = simulation.tolist()
 
 # Response
 {
-  "prediction": prediction_list,  # Values in range [0, ~10]
-  "shape": list(prediction.shape),
+  "simulation": simulation_list,  # Values in range [0, ~10]
+  "shape": list(simulation.shape),
   "status": "success"
 }
 ```
@@ -151,10 +151,10 @@ img_tensor = preprocess(image_bytes)  # Shape: [1, 3, 384, 384]
 input_name = session.get_inputs()[0].name
 onnx_input = {input_name: img_tensor}
 onnx_output = session.run(None, onnx_input)
-prediction = onnx_output[0]
+simulation = onnx_output[0]
 
 # Postprocess: scale to [0, 10] range
-result = prediction.squeeze() * 255
+result = simulation.squeeze() * 255
 ```
 
 ---
@@ -184,9 +184,9 @@ input_name = session.get_inputs()[0].name
 output = session.run(None, {input_name: img})[0]
 
 # Postprocess: scale to [0, 10] range
-prediction = output.squeeze() * 255
-print(f"Shape: {prediction.shape}")
-print(f"Range: [{prediction.min():.2f}, {prediction.max():.2f}]")
+simulation = output.squeeze() * 255
+print(f"Shape: {simulation.shape}")
+print(f"Range: [{simulation.min():.2f}, {simulation.max():.2f}]")
 ```
 
 ---

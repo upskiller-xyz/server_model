@@ -72,7 +72,7 @@ curl -X POST http://localhost:8000/run \
 **Response:**
 ```json
 {
-  "prediction": [[...]],
+  "simulation": [[...]],
   "shape": [384, 384],
   "status": "success"
 }

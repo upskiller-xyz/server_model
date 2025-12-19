@@ -9,7 +9,7 @@ This document describes the REST API endpoints for the Upskiller Model Server.
 2. [Server Configuration](#server-configuration)
 3. [API Endpoints](#api-endpoints)
    - [GET / - Health Check](#get---health-check)
-   - [POST /run - Run Prediction](#post-run---run-prediction)
+   - [POST /run - Run Prediction](#post-run---run-simulation)
 4. [Error Handling](#error-handling)
 5. [Usage Examples](#usage-examples)
 
@@ -112,7 +112,7 @@ console.log(`Status: ${data.status}`);
 
 ### POST `/run` - Run Prediction
 
-Processes an uploaded image and returns model predictions.
+Processes an uploaded image and returns model simulations.
 
 **Request:**
 - **Method:** POST
@@ -186,7 +186,7 @@ console.log(result);
 **Response (200 OK - Success):**
 ```json
 {
-  "prediction": [
+  "simulation": [
     [0.123, 0.456, 0.789, ...],
     [0.234, 0.567, 0.890, ...],
     ...
@@ -197,11 +197,11 @@ console.log(result);
 ```
 
 **Response Fields:**
-- `prediction` (array): 2D array of prediction values with shape `[384, 384]`
-  - Each value is a float representing the model's prediction for that pixel
+- `simulation` (array): 2D array of simulation values with shape `[384, 384]`
+  - Each value is a float representing the model's simulation for that pixel
   - Range: `[0.0, ~10.0]` (raw model output scaled by 255)
-- `shape` (array): Dimensions of the prediction `[height, width]`
-- `status` (string): `"success"` for successful predictions
+- `shape` (array): Dimensions of the simulation `[height, width]`
+- `status` (string): `"success"` for successful simulations
 
 
 ## Additional Resources

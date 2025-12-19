@@ -39,7 +39,7 @@ def save_batch_out(
         save_comparisons=True
 ):
     path_comparison = Path(folder_path) / "comparison"
-    path_out = Path(folder_path) / "predictions"
+    path_out = Path(folder_path) / "simulations"
     path_comparison.mkdir(parents=True, exist_ok=True)
     path_out.mkdir(parents=True, exist_ok=True)
 
