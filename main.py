@@ -7,7 +7,7 @@ from src.server.services.logging import StructuredLogger
 from src.server.services.download import HTTPDownloadStrategy
 from src.server.services.model_loader import ModelLoaderFactory
 from src.server.services.image_processor import ImageProcessorFactory
-from src.server.services.prediction import PredictionServiceFactory
+from src.server.services.simulation import SimulationServiceFactory
 from src.server.enums import LogLevel, ContentType, HTTPStatus
 
 
@@ -46,8 +46,8 @@ class ModelServerApplication:
         # Image processor
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
-        # Prediction service
-        prediction_service = PredictionServiceFactory.create_model_prediction_service(
+        # Simulation service
+        simulation_service = SimulationServiceFactory.create_model_simulation_service(
             model_loader=model_loader,
             image_processor=image_processor,
             logger=logger
@@ -55,7 +55,7 @@ class ModelServerApplication:
 
         # Controller
         self._controller = ModelServerController(
-            prediction_service=prediction_service,
+            simulation_service=simulation_service,
             logger=logger
         )
 
@@ -65,14 +65,14 @@ class ModelServerApplication:
     def _setup_routes(self) -> None:
         """Setup Flask routes"""
         self._app.add_url_rule("/", "get_status", self._get_status, methods=["GET"])
-        self._app.add_url_rule("/run", "run_prediction", self._run_prediction, methods=["POST"])
+        self._app.add_url_rule("/run", "run_simulation", self._run_simulation, methods=["POST"])
 
     def _get_status(self) -> Dict[str, Any]:
         """Get server status endpoint"""
         return jsonify(self._controller.get_status())
 
-    def _run_prediction(self) -> Dict[str, Any]:
-        """Run prediction endpoint"""
+    def _run_simulation(self) -> Dict[str, Any]:
+        """Run simulation endpoint"""
         # Check if file was uploaded
         if 'file' not in request.files:
             raise BadRequest("No file uploaded")
@@ -87,8 +87,8 @@ class ModelServerApplication:
             # Read image bytes
             image_bytes = file.read()
 
-            # Process prediction
-            result = self._controller.handle_prediction_request(image_bytes)
+            # Process simulation
+            result = self._controller.handle_simulation_request(image_bytes)
 
             # Check for errors
             if result.get("status") == "error":
@@ -97,7 +97,7 @@ class ModelServerApplication:
             return jsonify(result)
 
         except Exception as e:
-            return jsonify({"error": f"Prediction failed: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
+            return jsonify({"error": f"Simulation failed: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
 
     @property
     def app(self) -> Flask:

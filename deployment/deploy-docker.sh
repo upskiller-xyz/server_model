@@ -141,9 +141,10 @@ fi
 # Create logs directory
 mkdir -p logs
 
-# Stop existing containers
-echo -e "${YELLOW}Stopping existing containers...${NC}"
-$DOCKER_COMPOSE down --remove-orphans 2>/dev/null || true
+# Stop existing instances of this container only
+echo -e "${YELLOW}Stopping existing server-model container...${NC}"
+docker stop server-model 2>/dev/null || true
+docker rm server-model 2>/dev/null || true
 
 # Build and start containers
 if [ "$FORCE_BUILD" = true ]; then

@@ -14,7 +14,7 @@ def save_comparison(img, gt, out, path):
     ax[2].imshow((clip_out.squeeze().cpu().numpy() * 255).astype('uint8'))
     ax[2].set_title("Predicted Output")
     ax[3].imshow(((clip_out - gt).abs().squeeze().cpu().numpy() * 255).astype('uint8'))
-    ax[3].set_title("Prediction - target")
+    ax[3].set_title("Simulation - target")
     plt.savefig(path)
     plt.close(fig)
 
@@ -39,7 +39,7 @@ def save_batch_out(
         save_comparisons=True
 ):
     path_comparison = Path(folder_path) / "comparison"
-    path_out = Path(folder_path) / "predictions"
+    path_out = Path(folder_path) / "simulations"
     path_comparison.mkdir(parents=True, exist_ok=True)
     path_out.mkdir(parents=True, exist_ok=True)
 
