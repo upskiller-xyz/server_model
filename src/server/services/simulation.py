@@ -1,3 +1,4 @@
+import re
 import threading
 import numpy as np
 import onnxruntime as ort
@@ -8,6 +9,7 @@ from .onnx_model_loader import ONNXInferenceWrapper
 
 
 _MODEL_URL_TEMPLATE = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class ModelSimulationService(ISimulationService):
@@ -36,8 +38,16 @@ class ModelSimulationService(ISimulationService):
         self._cache: Dict[str, ONNXInferenceWrapper] = {}
         self._lock = threading.Lock()
 
+    def _validate_model_name(self, model_name: str) -> None:
+        if not _MODEL_NAME_RE.match(model_name):
+            raise ValueError(f"Invalid model name: '{model_name}'")
+        resolved = (self._checkpoints_dir / f"{model_name}.onnx").resolve()
+        if not resolved.is_relative_to(self._checkpoints_dir.resolve()):
+            raise ValueError(f"Model path escapes checkpoints directory: '{model_name}'")
+
     def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
         """Load ONNX model by name, downloading if necessary."""
+        self._validate_model_name(model_name)
         local_path = self._checkpoints_dir / f"{model_name}.onnx"
 
         if not local_path.exists():
