@@ -37,6 +37,14 @@ class ISimulationService(ABC):
     ) -> Dict[str, Any]: ...
 
 
+class IModelLoader(ABC):
+    @abstractmethod
+    def load(self) -> Any: ...
+
+    @abstractmethod
+    def get_model(self) -> Any: ...
+
+
 class IServerController(ABC):
     @abstractmethod
     def initialize(self) -> None: ...

@@ -58,7 +58,13 @@ class ModelServerApplication:
         cond_vec: Optional[np.ndarray] = None
         raw_cond = request.form.get('cond_vec')
         if raw_cond:
-            cond_vec = np.array(json.loads(raw_cond), dtype=np.float32)[np.newaxis, :]  # (1, D)
+            try:
+                parsed = json.loads(raw_cond)
+                if not isinstance(parsed, list) or not all(isinstance(v, (int, float)) for v in parsed):
+                    raise BadRequest("'cond_vec' must be a JSON array of numbers")
+                cond_vec = np.array(parsed, dtype=np.float32)[np.newaxis, :]  # (1, D)
+            except json.JSONDecodeError:
+                raise BadRequest("'cond_vec' is not valid JSON")
 
         image_bytes = file.read()
         result = self._controller.handle_simulation_request(image_bytes, model_name, cond_vec)

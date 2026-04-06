@@ -2,10 +2,14 @@ import re
 import threading
 import numpy as np
 import onnxruntime as ort
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, Any, Optional
 from ..interfaces import ISimulationService, IDownloadStrategy, IImageProcessor, ILogger
 from .onnx_model_loader import ONNXInferenceWrapper
+
+
+_MAX_CACHED_MODELS = 10
 
 
 _MODEL_URL_TEMPLATE = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
@@ -35,7 +39,7 @@ class ModelSimulationService(ISimulationService):
         self._download_strategy = download_strategy
         self._image_processor = image_processor
         self._logger = logger
-        self._cache: Dict[str, ONNXInferenceWrapper] = {}
+        self._cache: OrderedDict[str, ONNXInferenceWrapper] = OrderedDict()
         self._lock = threading.Lock()
 
     def _validate_model_name(self, model_name: str) -> None:
@@ -66,11 +70,17 @@ class ModelSimulationService(ISimulationService):
         return wrapper
 
     def _get_model(self, model_name: str) -> ONNXInferenceWrapper:
-        if model_name not in self._cache:
-            with self._lock:
-                if model_name not in self._cache:  # double-checked locking
-                    self._cache[model_name] = self._load_model(model_name)
-        return self._cache[model_name]
+        with self._lock:
+            if model_name in self._cache:
+                self._cache.move_to_end(model_name)  # LRU: mark as most recent
+                return self._cache[model_name]
+            wrapper = self._load_model(model_name)
+            if len(self._cache) >= _MAX_CACHED_MODELS:
+                evicted = next(iter(self._cache))
+                del self._cache[evicted]
+                self._logger.info(f"Cache full — evicted model '{evicted}'")
+            self._cache[model_name] = wrapper
+            return wrapper
 
     def simulate(
         self,
