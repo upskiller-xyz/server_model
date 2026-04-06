@@ -1,92 +1,120 @@
+import re
+import threading
 import numpy as np
-from typing import Dict, Any
-from ..interfaces import ISimulationService, IModelLoader, IImageProcessor, ILogger
+import onnxruntime as ort
+from pathlib import Path
+from typing import Dict, Any, Optional
+from ..interfaces import ISimulationService, IDownloadStrategy, IImageProcessor, ILogger
+from .onnx_model_loader import ONNXInferenceWrapper
+
+
+_MODEL_URL_TEMPLATE = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+_MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
 class ModelSimulationService(ISimulationService):
-    """Service for making model simulations (ONNX or TorchScript)"""
+    """
+    Simulation service that supports multiple models.
+
+    Model resolution per request:
+      1. Client passes model name (e.g. "df_default_2.0.1") in the request.
+      2. Server looks for ./checkpoints/<name>.onnx locally.
+      3. If not found, downloads from the model registry URL.
+      4. Loaded sessions are cached in memory by model name.
+      5. Whether cond_vec is used is determined by the model itself (has_cond_vec).
+    """
 
     def __init__(
         self,
-        model_loader: IModelLoader,
+        checkpoints_dir: str,
+        download_strategy: IDownloadStrategy,
         image_processor: IImageProcessor,
-        logger: ILogger
+        logger: ILogger,
     ):
-        self._model_loader = model_loader
+        self._checkpoints_dir = Path(checkpoints_dir)
+        self._download_strategy = download_strategy
         self._image_processor = image_processor
         self._logger = logger
-        self._model = None
+        self._cache: Dict[str, ONNXInferenceWrapper] = {}
+        self._lock = threading.Lock()
 
-    def _ensure_model_loaded(self) -> None:
-        """Ensure model is loaded and ready"""
-        if self._model is None:
-            self._logger.info("Loading model for first simulation")
-            self._model = self._model_loader.load()
+    def _validate_model_name(self, model_name: str) -> None:
+        if not _MODEL_NAME_RE.match(model_name):
+            raise ValueError(f"Invalid model name: '{model_name}'")
+        resolved = (self._checkpoints_dir / f"{model_name}.onnx").resolve()
+        if not resolved.is_relative_to(self._checkpoints_dir.resolve()):
+            raise ValueError(f"Model path escapes checkpoints directory: '{model_name}'")
 
-    def simulate(self, image_bytes: bytes) -> Dict[str, Any]:
-        """
-        Make simulation on image bytes using the loaded model.
+    def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
+        """Load ONNX model by name, downloading if necessary."""
+        self._validate_model_name(model_name)
+        local_path = self._checkpoints_dir / f"{model_name}.onnx"
 
-        Args:
-            image_bytes: Raw image bytes from HTTP upload
+        if not local_path.exists():
+            url = _MODEL_URL_TEMPLATE.format(name=model_name)
+            self._logger.info(f"Downloading model '{model_name}' from {url}")
+            self._download_strategy.download(url, str(local_path))
 
-        Returns:
-            Dict containing:
-                - simulation: 2D list of simulateed values [H, W]
-                - shape: List [height, width] of simulation
-                - status: "success" or "error"
-                - error: Error message (only if status is "error")
-        """
+        providers = [p for p in ['CUDAExecutionProvider', 'CPUExecutionProvider']
+                     if p in ort.get_available_providers()]
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session = ort.InferenceSession(str(local_path), sess_options=session_options, providers=providers)
+
+        wrapper = ONNXInferenceWrapper(session)
+        self._logger.info(f"Model '{model_name}' loaded (provider: {session.get_providers()[0]}, has_cond_vec: {wrapper.has_cond_vec})")
+        return wrapper
+
+    def _get_model(self, model_name: str) -> ONNXInferenceWrapper:
+        if model_name not in self._cache:
+            with self._lock:
+                if model_name not in self._cache:  # double-checked locking
+                    self._cache[model_name] = self._load_model(model_name)
+        return self._cache[model_name]
+
+    def simulate(
+        self,
+        image_bytes: bytes,
+        model_name: str,
+        cond_vec: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]:
         try:
-            self._ensure_model_loaded()
+            model = self._get_model(model_name)
 
-            # Preprocess image (returns numpy array)
-            image_np = self._image_processor.preprocess(image_bytes)
+            image_np = self._image_processor.preprocess(image_bytes)  # (1, C, H, W) in [0, 1]
 
-            # Log input statistics
-            self._logger.info(f"Input tensor shape: {image_np.shape}, dtype: {image_np.dtype}")
-            self._logger.info(f"Input tensor - min: {image_np.min():.6f}, max: {image_np.max():.6f}, mean: {image_np.mean():.6f}")
+            # Pass cond_vec only if the model expects it
+            cv = cond_vec if model.has_cond_vec else None
+            if model.has_cond_vec and cond_vec is None:
+                self._logger.warning(f"Model '{model_name}' expects cond_vec but none was provided")
 
-            # Make simulation
-            self._logger.debug(f"Running model inference")
-            output = self._model(image_np)
+            output = model(image_np, cv)          # (1, 1, H, W)
+            output_np = output.squeeze() * 255    # (H, W) in [0, 255]
 
-            # Process output: squeeze and scale by 255
-            output_np = output.squeeze() * 255
-            output_list = output_np.tolist()
-
-            # Log output statistics
-            self._logger.info(f"Output tensor shape: {output_np.shape}")
-            self._logger.info(f"Output tensor (scaled) - min: {output_np.min():.6f}, max: {output_np.max():.6f}, mean: {output_np.mean():.6f}")
+            self._logger.info(f"Output shape: {output_np.shape}, range: [{output_np.min():.3f}, {output_np.max():.3f}]")
 
             return {
-                "simulation": output_list,
+                "simulation": output_np.tolist(),
                 "shape": list(output_np.shape),
-                "status": "success"
+                "status": "success",
             }
 
         except Exception as e:
-            self._logger.error(f"Simulation failed: {str(e)}")
-            return {
-                "simulation": None,
-                "shape": None,
-                "status": "error",
-                "error": str(e)
-            }
+            self._logger.error(f"Simulation failed: {e}")
+            return {"simulation": None, "shape": None, "status": "error", "error": str(e)}
 
 
 class SimulationServiceFactory:
-    """Factory for creating simulation services"""
-
     @staticmethod
-    def create_model_simulation_service(
-        model_loader: IModelLoader,
+    def create(
+        checkpoints_dir: str,
+        download_strategy: IDownloadStrategy,
         image_processor: IImageProcessor,
-        logger: ILogger
+        logger: ILogger,
     ) -> ISimulationService:
-        """Create model-based simulation service"""
         return ModelSimulationService(
-            model_loader=model_loader,
+            checkpoints_dir=checkpoints_dir,
+            download_strategy=download_strategy,
             image_processor=image_processor,
-            logger=logger
+            logger=logger,
         )

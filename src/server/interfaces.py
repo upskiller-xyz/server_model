@@ -1,75 +1,45 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
-import torch
+from typing import Any, Dict, Optional
 import numpy as np
-from PIL import Image
-
-
-class IModelLoader(ABC):
-    """Interface for model loading strategies"""
-
-    @abstractmethod
-    def load(self) -> torch.nn.Module:
-        """Load and return the model"""
-        pass
 
 
 class IImageProcessor(ABC):
-    """Interface for image processing strategies"""
-
     @abstractmethod
-    def preprocess(self, image_bytes: bytes) -> torch.Tensor:
-        """Preprocess image bytes into tensor"""
-        pass
+    def preprocess(self, image_bytes: bytes) -> np.ndarray: ...
 
 
 class IDownloadStrategy(ABC):
-    """Interface for download strategies"""
-
     @abstractmethod
-    def download(self, url: str, local_path: str) -> str:
-        """Download file from URL to local path"""
-        pass
+    def download(self, url: str, local_path: str) -> str: ...
 
 
 class ILogger(ABC):
-    """Interface for logging strategies"""
+    @abstractmethod
+    def debug(self, message: str) -> None: ...
 
     @abstractmethod
-    def debug(self, message: str) -> None:
-        pass
+    def info(self, message: str) -> None: ...
 
     @abstractmethod
-    def info(self, message: str) -> None:
-        pass
+    def warning(self, message: str) -> None: ...
 
     @abstractmethod
-    def warning(self, message: str) -> None:
-        pass
-
-    @abstractmethod
-    def error(self, message: str) -> None:
-        pass
+    def error(self, message: str) -> None: ...
 
 
 class ISimulationService(ABC):
-    """Interface for simulation services"""
-
     @abstractmethod
-    def simulate(self, image_bytes: bytes) -> Dict[str, Any]:
-        """Make simulation on image and return result"""
-        pass
+    def simulate(
+        self,
+        image_bytes: bytes,
+        model_name: str,
+        cond_vec: Optional[np.ndarray] = None,
+    ) -> Dict[str, Any]: ...
 
 
 class IServerController(ABC):
-    """Interface for server controllers"""
+    @abstractmethod
+    def initialize(self) -> None: ...
 
     @abstractmethod
-    def initialize(self) -> None:
-        """Initialize the server"""
-        pass
-
-    @abstractmethod
-    def get_status(self) -> Dict[str, Any]:
-        """Get server status"""
-        pass
+    def get_status(self) -> Dict[str, Any]: ...
