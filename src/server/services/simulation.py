@@ -11,8 +11,6 @@ from .onnx_model_loader import ONNXInferenceWrapper
 
 _MAX_CACHED_MODELS = 10
 
-
-_MODEL_URL_TEMPLATE = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
@@ -34,11 +32,20 @@ class ModelSimulationService(ISimulationService):
         download_strategy: IDownloadStrategy,
         image_processor: IImageProcessor,
         logger: ILogger,
+        model_url_template: str = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx",
     ):
+        if "{name}" not in model_url_template:
+            raise ValueError(f"MODEL_URL_TEMPLATE must contain '{{name}}' placeholder, got: {model_url_template!r}")
+        try:
+            model_url_template.format(name="__validation__")
+        except (KeyError, ValueError) as e:
+            raise ValueError(f"MODEL_URL_TEMPLATE is not a valid format string: {e}") from e
+
         self._checkpoints_dir = Path(checkpoints_dir)
         self._download_strategy = download_strategy
         self._image_processor = image_processor
         self._logger = logger
+        self._model_url_template = model_url_template
         self._cache: OrderedDict[str, ONNXInferenceWrapper] = OrderedDict()
         self._lock = threading.Lock()
 
@@ -55,7 +62,7 @@ class ModelSimulationService(ISimulationService):
         local_path = self._checkpoints_dir / f"{model_name}.onnx"
 
         if not local_path.exists():
-            url = _MODEL_URL_TEMPLATE.format(name=model_name)
+            url = self._model_url_template.format(name=model_name)
             self._logger.info(f"Downloading model '{model_name}' from {url}")
             self._download_strategy.download(url, str(local_path))
 
@@ -121,10 +128,12 @@ class SimulationServiceFactory:
         download_strategy: IDownloadStrategy,
         image_processor: IImageProcessor,
         logger: ILogger,
+        model_url_template: str = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx",
     ) -> ISimulationService:
         return ModelSimulationService(
             checkpoints_dir=checkpoints_dir,
             download_strategy=download_strategy,
             image_processor=image_processor,
             logger=logger,
+            model_url_template=model_url_template,
         )

@@ -1,4 +1,5 @@
 import json
+import os
 import numpy as np
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import BadRequest
@@ -6,7 +7,7 @@ from typing import Dict, Any, Optional
 
 from src.server.controller import ModelServerController
 from src.server.services.logging import StructuredLogger
-from src.server.services.download import HTTPDownloadStrategy
+from src.server.services.download import HTTPDownloadStrategy, S3DownloadStrategy
 from src.server.services.image_processor import ImageProcessorFactory
 from src.server.services.simulation import SimulationServiceFactory
 from src.server.enums import LogLevel, ContentType, HTTPStatus
@@ -22,14 +23,34 @@ class ModelServerApplication:
 
     def _setup_dependencies(self) -> None:
         logger = StructuredLogger("ModelServer", LogLevel.INFO)
-        download_strategy = HTTPDownloadStrategy(logger)
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
+
+        model_url_template = os.getenv(
+            "MODEL_URL_TEMPLATE",
+            "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+        )
+
+        if model_url_template.startswith("s3://"):
+            access_key = os.getenv("SCW_ACCESS_KEY")
+            secret_key = os.getenv("SCW_SECRET_KEY")
+            if not access_key or not secret_key:
+                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when MODEL_URL_TEMPLATE uses s3://")
+            download_strategy = S3DownloadStrategy(
+                logger=logger,
+                access_key=access_key,
+                secret_key=secret_key,
+                region=os.getenv("SCW_REGION", "fr-par"),
+                endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
+            )
+        else:
+            download_strategy = HTTPDownloadStrategy(logger)
 
         simulation_service = SimulationServiceFactory.create(
             checkpoints_dir="./checkpoints",
             download_strategy=download_strategy,
             image_processor=image_processor,
             logger=logger,
+            model_url_template=model_url_template,
         )
 
         self._controller = ModelServerController(simulation_service=simulation_service, logger=logger)
