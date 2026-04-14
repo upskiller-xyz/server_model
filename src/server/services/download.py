@@ -1,5 +1,7 @@
 import os
 import requests
+import boto3
+from botocore.exceptions import ClientError
 from typing import Optional
 from ..interfaces import IDownloadStrategy, ILogger
 
@@ -38,4 +40,57 @@ class HTTPDownloadStrategy(IDownloadStrategy):
             raise
         except IOError as e:
             self._logger.error(f"File write failed: {str(e)}")
+            raise
+
+
+class S3DownloadStrategy(IDownloadStrategy):
+    """Scaleway S3 download strategy for private buckets.
+
+    Expects URLs in s3://bucket/key format.
+    Uses boto3 with Scaleway's S3-compatible endpoint.
+    """
+
+    def __init__(
+        self,
+        logger: ILogger,
+        access_key: str,
+        secret_key: str,
+        region: str,
+        endpoint_url: str,
+    ):
+        self._logger = logger
+        self._s3 = boto3.client(
+            "s3",
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+        )
+
+    def download(self, url: str, local_path: str) -> str:
+        """Download file from private S3 bucket to local path.
+
+        Args:
+            url: S3 URL in s3://bucket/key format
+            local_path: Destination path on disk
+
+        Returns:
+            local_path after successful download
+        """
+        if os.path.exists(local_path):
+            self._logger.info(f"File already exists at {local_path}")
+            return local_path
+
+        without_scheme = url[len("s3://"):]
+        bucket, key = without_scheme.split("/", 1)
+
+        self._logger.info(f"Downloading s3://{bucket}/{key} to {local_path}")
+
+        try:
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            self._s3.download_file(bucket, key, local_path)
+            self._logger.info(f"Download completed: {local_path}")
+            return local_path
+        except ClientError as e:
+            self._logger.error(f"S3 download failed: {str(e)}")
             raise
