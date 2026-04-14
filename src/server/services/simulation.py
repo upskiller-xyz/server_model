@@ -34,6 +34,13 @@ class ModelSimulationService(ISimulationService):
         logger: ILogger,
         model_url_template: str = "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx",
     ):
+        if "{name}" not in model_url_template:
+            raise ValueError(f"MODEL_URL_TEMPLATE must contain '{{name}}' placeholder, got: {model_url_template!r}")
+        try:
+            model_url_template.format(name="__validation__")
+        except (KeyError, ValueError) as e:
+            raise ValueError(f"MODEL_URL_TEMPLATE is not a valid format string: {e}") from e
+
         self._checkpoints_dir = Path(checkpoints_dir)
         self._download_strategy = download_strategy
         self._image_processor = image_processor

@@ -31,10 +31,14 @@ class ModelServerApplication:
         )
 
         if model_url_template.startswith("s3://"):
+            access_key = os.getenv("SCW_ACCESS_KEY")
+            secret_key = os.getenv("SCW_SECRET_KEY")
+            if not access_key or not secret_key:
+                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when MODEL_URL_TEMPLATE uses s3://")
             download_strategy = S3DownloadStrategy(
                 logger=logger,
-                access_key=os.getenv("SCW_ACCESS_KEY", ""),
-                secret_key=os.getenv("SCW_SECRET_KEY", ""),
+                access_key=access_key,
+                secret_key=secret_key,
                 region=os.getenv("SCW_REGION", "fr-par"),
                 endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
             )

@@ -1,8 +1,8 @@
 import os
+from pathlib import Path
 import requests
 import boto3
-from botocore.exceptions import ClientError
-from typing import Optional
+from botocore.exceptions import ClientError, BotoCoreError
 from ..interfaces import IDownloadStrategy, ILogger
 
 
@@ -81,16 +81,26 @@ class S3DownloadStrategy(IDownloadStrategy):
             self._logger.info(f"File already exists at {local_path}")
             return local_path
 
+        if not url.startswith("s3://"):
+            raise ValueError(f"Invalid S3 URL — expected s3://bucket/key, got: {url!r}")
         without_scheme = url[len("s3://"):]
-        bucket, key = without_scheme.split("/", 1)
+        parts = without_scheme.split("/", 1)
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError(f"Invalid S3 URL — expected s3://bucket/key, got: {url!r}")
+        bucket, key = parts
 
         self._logger.info(f"Downloading s3://{bucket}/{key} to {local_path}")
 
         try:
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            parent = Path(local_path).parent
+            if parent != Path("."):
+                parent.mkdir(parents=True, exist_ok=True)
             self._s3.download_file(bucket, key, local_path)
             self._logger.info(f"Download completed: {local_path}")
             return local_path
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             self._logger.error(f"S3 download failed: {str(e)}")
+            raise
+        except OSError as e:
+            self._logger.error(f"File write failed: {str(e)}")
             raise
