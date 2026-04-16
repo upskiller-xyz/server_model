@@ -126,7 +126,7 @@ Processes an uploaded image and returns model simulations.
 
 **Image Requirements:**
 - Any resolution (automatically resized to 384×384)
-- Grayscale, grayscale+alpha (LA), RGB, or RGBA — alpha is preserved when present (the model relies on it for some encodings, e.g. as a background mask). The channel count of the input must match what the loaded model expects.
+- Grayscale, luminance+alpha (2-channel, e.g. v5 encodings), RGB, or BGRA (4-channel). Only the 3-channel case is reordered (BGR→RGB) — other layouts are passed to the model in cv2's native order. Alpha is preserved when present. The channel count of the input must match what the loaded model expects.
 
 **Request Example (cURL):**
 ```bash

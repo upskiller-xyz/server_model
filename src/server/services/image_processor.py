@@ -26,11 +26,13 @@ class StandardImageProcessor(IImageProcessor):
 
     Pipeline:
       1. Decode bytes with cv2 (alpha channel preserved)
-      2. Reorder channels to RGB(A) using a per-layout strategy:
+      2. Per-layout channel handling:
            - 1 channel  → kept as grayscale
-           - 2 channels → broadcast luminance over R/G/B, keep alpha → RGBA
-           - 3 channels → BGR  → RGB
-           - 4 channels → BGRA → RGBA
+           - 2 channels → passed through (e.g. v5 luminance+alpha encodings)
+           - 3 channels → BGR → RGB (only layout where cv2's native order is
+             rewritten, matching the pre-existing behavior)
+           - 4 channels → passed through as BGRA (no reorder — the original
+             code never reordered the 4-channel layout as a whole)
          Any other channel count raises ``ValueError``.
       3. Normalize to [0, 1] (divide by 255)
       4. Resize to 384×384 with bilinear interpolation
@@ -45,9 +47,9 @@ class StandardImageProcessor(IImageProcessor):
         # and makes adding new layouts a one-line change.
         self._channel_handlers: Dict[ChannelLayout, Callable[[np.ndarray], np.ndarray]] = {
             ChannelLayout.GRAYSCALE: self._handle_grayscale,
-            ChannelLayout.GRAYSCALE_ALPHA: self._handle_grayscale_alpha,
+            ChannelLayout.GRAYSCALE_ALPHA: self._handle_passthrough,
             ChannelLayout.BGR: self._handle_bgr,
-            ChannelLayout.BGRA: self._handle_bgra,
+            ChannelLayout.BGRA: self._handle_passthrough,
         }
 
     @staticmethod
@@ -57,19 +59,14 @@ class StandardImageProcessor(IImageProcessor):
         return img[:, :, 0] if img.ndim == 3 else img
 
     @staticmethod
-    def _handle_grayscale_alpha(img: np.ndarray) -> np.ndarray:
-        # (H, W, 2) → (H, W, 4): broadcast luminance over R, G, B; keep alpha.
-        gray = img[:, :, 0:1]
-        alpha = img[:, :, 1:2]
-        return np.concatenate([gray, gray, gray, alpha], axis=-1).copy()
+    def _handle_passthrough(img: np.ndarray) -> np.ndarray:
+        # Layouts that had no channel-reorder in the original code
+        # (2-channel luminance+alpha, 4-channel BGRA). Pass through unchanged.
+        return img
 
     @staticmethod
     def _handle_bgr(img: np.ndarray) -> np.ndarray:
-        return img[:, :, ::-1].copy()                 # BGR → RGB
-
-    @staticmethod
-    def _handle_bgra(img: np.ndarray) -> np.ndarray:
-        return img[:, :, [2, 1, 0, 3]].copy()         # BGRA → RGBA
+        return img[:, :, ::-1].copy()                 # BGR → RGB (as before)
 
     @staticmethod
     def _detect_layout(img_np: np.ndarray) -> ChannelLayout:
