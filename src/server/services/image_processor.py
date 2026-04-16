@@ -8,8 +8,8 @@ from ..interfaces import IImageProcessor, ILogger
 class StandardImageProcessor(IImageProcessor):
     """
     Preprocesses an encoded input image to match DaylightDataset.__getitem__:
-      1. Decode bytes with cv2
-      2. BGR→RGB for 3-channel images
+      1. Decode bytes with cv2 (preserving alpha channel if present)
+      2. BGR→RGB for 3-channel images, BGRA→RGBA for 4-channel images
       3. Normalize to [0, 1]  (divide by 255)
       4. Resize to 384×384 with bilinear interpolation
       5. HWC → CHW
@@ -27,13 +27,14 @@ class StandardImageProcessor(IImageProcessor):
         if img_np is None:
             raise ValueError("Failed to decode image")
 
-        # Drop alpha channel if present
-        if img_np.ndim == 3 and img_np.shape[-1] == 4:
-            img_np = img_np[:, :, :3]
-
-        # BGR → RGB (cv2 loads colour images as BGR)
-        if img_np.ndim == 3 and img_np.shape[-1] == 3:
-            img_np = img_np[:, :, ::-1].copy()
+        # Convert cv2's native BGR(A) ordering to RGB(A); the alpha channel,
+        # if present, is preserved because it carries input information the
+        # model relies on (e.g. background masks).
+        if img_np.ndim == 3:
+            if img_np.shape[-1] == 3:
+                img_np = img_np[:, :, ::-1].copy()                 # BGR → RGB
+            elif img_np.shape[-1] == 4:
+                img_np = img_np[:, :, [2, 1, 0, 3]].copy()         # BGRA → RGBA
 
         img_np = img_np.astype(np.float32)
 
