@@ -126,7 +126,7 @@ Processes an uploaded image and returns model simulations.
 
 **Image Requirements:**
 - Any resolution (automatically resized to 384×384)
-- RGB or RGBA
+- Grayscale, luminance+alpha (2-channel, e.g. v5 encodings), RGB, or BGRA (4-channel). Only the 3-channel case is reordered (BGR→RGB) — other layouts are passed to the model in cv2's native order. Alpha is preserved when present. The channel count of the input must match what the loaded model expects.
 
 **Request Example (cURL):**
 ```bash
@@ -199,7 +199,7 @@ console.log(result);
 **Response Fields:**
 - `simulation` (array): 2D array of simulation values with shape `[384, 384]`
   - Each value is a float representing the model's simulation for that pixel
-  - Range: `[0.0, ~10.0]` (raw model output scaled by 255)
+  - Range: raw model output (no scaling applied), approximately `[0.0, 1.0]` — values are no longer rescaled by the server.
 - `shape` (array): Dimensions of the simulation `[height, width]`
 - `status` (string): `"success"` for successful simulations
 
