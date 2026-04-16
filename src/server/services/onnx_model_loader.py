@@ -21,10 +21,16 @@ class ONNXInferenceWrapper:
         self._has_cond_vec = any(inp.name == 'cond_vec' for inp in inputs)
         self._input_name = next(inp.name for inp in inputs if inp.name != 'cond_vec')
         self._output_name = session.get_outputs()[0].name
+        image_input = next(inp for inp in inputs if inp.name == self._input_name)
+        self._in_channels = image_input.shape[1]  # (batch, channels, H, W)
 
     @property
     def has_cond_vec(self) -> bool:
         return self._has_cond_vec
+
+    @property
+    def in_channels(self) -> int:
+        return self._in_channels
 
     def __call__(self, input_tensor: np.ndarray, cond_vec: Optional[np.ndarray] = None) -> np.ndarray:
         feed = {self._input_name: input_tensor}

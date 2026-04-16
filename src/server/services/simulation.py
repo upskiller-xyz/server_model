@@ -100,6 +100,12 @@ class ModelSimulationService(ISimulationService):
 
             image_np = self._image_processor.preprocess(image_bytes)  # (1, C, H, W) in [0, 1]
 
+            # Trim channels to match model expectation (e.g. 4-channel image → 3-channel model)
+            actual_channels = image_np.shape[1]
+            if actual_channels > model.in_channels:
+                image_np = image_np[:, :model.in_channels, :, :]
+                self._logger.info(f"Trimmed image channels from {actual_channels} to {model.in_channels}")
+
             # Pass cond_vec only if the model expects it
             cv = cond_vec if model.has_cond_vec else None
             if model.has_cond_vec and cond_vec is None:
