@@ -1,24 +1,89 @@
 """Image preprocessing for model inference — mirrors DaylightDataset.__getitem__"""
-import numpy as np
+from enum import IntEnum
+from typing import Callable, Dict, Tuple
+
 import cv2
-from typing import Tuple
+import numpy as np
+
 from ..interfaces import IImageProcessor, ILogger
+
+
+class ChannelLayout(IntEnum):
+    """How OpenCV decoded the source image's channel dimension.
+
+    The integer value matches ``shape[-1]`` for 3D arrays; ``GRAYSCALE``
+    additionally covers true 2D (H, W) inputs.
+    """
+    GRAYSCALE = 1            # (H, W) or (H, W, 1)
+    GRAYSCALE_ALPHA = 2      # (H, W, 2) — luminance + alpha (e.g. v5 encodings)
+    BGR = 3                  # (H, W, 3)
+    BGRA = 4                 # (H, W, 4)
 
 
 class StandardImageProcessor(IImageProcessor):
     """
-    Preprocesses an encoded input image to match DaylightDataset.__getitem__:
-      1. Decode bytes with cv2 (preserving alpha channel if present)
-      2. BGR→RGB for 3-channel images, BGRA→RGBA for 4-channel images
-      3. Normalize to [0, 1]  (divide by 255)
+    Preprocesses an encoded input image for model inference.
+
+    Pipeline:
+      1. Decode bytes with cv2 (alpha channel preserved)
+      2. Reorder channels to RGB(A) using a per-layout strategy:
+           - 1 channel  → kept as grayscale
+           - 2 channels → broadcast luminance over R/G/B, keep alpha → RGBA
+           - 3 channels → BGR  → RGB
+           - 4 channels → BGRA → RGBA
+         Any other channel count raises ``ValueError``.
+      3. Normalize to [0, 1] (divide by 255)
       4. Resize to 384×384 with bilinear interpolation
-      5. HWC → CHW
+      5. HWC → CHW (or add a leading channel dim for grayscale)
       6. Add batch dimension → (1, C, H, W) float32
     """
 
     def __init__(self, logger: ILogger, target_size: Tuple[int, int] = (384, 384)):
         self._logger = logger
         self._target_size = target_size
+        # Strategy map keyed by detected channel layout. Avoids if/elif chains
+        # and makes adding new layouts a one-line change.
+        self._channel_handlers: Dict[ChannelLayout, Callable[[np.ndarray], np.ndarray]] = {
+            ChannelLayout.GRAYSCALE: self._handle_grayscale,
+            ChannelLayout.GRAYSCALE_ALPHA: self._handle_grayscale_alpha,
+            ChannelLayout.BGR: self._handle_bgr,
+            ChannelLayout.BGRA: self._handle_bgra,
+        }
+
+    @staticmethod
+    def _handle_grayscale(img: np.ndarray) -> np.ndarray:
+        # Collapse any trailing singleton channel dim → (H, W); the channel
+        # axis is re-added downstream in the HWC→CHW step.
+        return img[:, :, 0] if img.ndim == 3 else img
+
+    @staticmethod
+    def _handle_grayscale_alpha(img: np.ndarray) -> np.ndarray:
+        # (H, W, 2) → (H, W, 4): broadcast luminance over R, G, B; keep alpha.
+        gray = img[:, :, 0:1]
+        alpha = img[:, :, 1:2]
+        return np.concatenate([gray, gray, gray, alpha], axis=-1).copy()
+
+    @staticmethod
+    def _handle_bgr(img: np.ndarray) -> np.ndarray:
+        return img[:, :, ::-1].copy()                 # BGR → RGB
+
+    @staticmethod
+    def _handle_bgra(img: np.ndarray) -> np.ndarray:
+        return img[:, :, [2, 1, 0, 3]].copy()         # BGRA → RGBA
+
+    @staticmethod
+    def _detect_layout(img_np: np.ndarray) -> ChannelLayout:
+        if img_np.ndim == 2:
+            return ChannelLayout.GRAYSCALE
+        if img_np.ndim == 3:
+            try:
+                return ChannelLayout(img_np.shape[-1])
+            except ValueError:
+                pass
+        raise ValueError(
+            f"Unsupported image shape {img_np.shape}: expected 2D grayscale "
+            f"or 3D with 1, 2, 3 or 4 channels."
+        )
 
     def preprocess(self, image_bytes: bytes) -> np.ndarray:
         nparr = np.frombuffer(image_bytes, np.uint8)
@@ -27,24 +92,15 @@ class StandardImageProcessor(IImageProcessor):
         if img_np is None:
             raise ValueError("Failed to decode image")
 
-        # Convert cv2's native BGR(A) ordering to RGB(A); the alpha channel,
-        # if present, is preserved because it carries input information the
-        # model relies on (e.g. background masks).
-        if img_np.ndim == 3:
-            if img_np.shape[-1] == 3:
-                img_np = img_np[:, :, ::-1].copy()                 # BGR → RGB
-            elif img_np.shape[-1] == 4:
-                img_np = img_np[:, :, [2, 1, 0, 3]].copy()         # BGRA → RGBA
+        layout = self._detect_layout(img_np)
+        img_np = self._channel_handlers[layout](img_np)
 
-        img_np = img_np.astype(np.float32)
-
-        # Normalize to [0, 1]
-        img_np = img_np / 255.0
+        img_np = img_np.astype(np.float32) / 255.0
 
         # Resize with bilinear interpolation (matches DaylightDataset)
         img_np = cv2.resize(img_np, self._target_size, interpolation=cv2.INTER_LINEAR)
 
-        # HWC → CHW
+        # HWC → CHW (or add leading channel dim for grayscale)
         if img_np.ndim == 2:
             img_np = img_np[np.newaxis, :, :]          # (1, H, W)
         else:
@@ -53,7 +109,10 @@ class StandardImageProcessor(IImageProcessor):
         # Add batch dimension → (1, C, H, W)
         img_np = np.expand_dims(img_np, axis=0)
 
-        self._logger.debug(f"Preprocessed shape: {img_np.shape}, range: [{img_np.min():.3f}, {img_np.max():.3f}]")
+        self._logger.debug(
+            f"Preprocessed layout={layout.name}, shape={img_np.shape}, "
+            f"range=[{img_np.min():.3f}, {img_np.max():.3f}]"
+        )
         return img_np
 
 

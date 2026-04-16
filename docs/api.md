@@ -126,7 +126,7 @@ Processes an uploaded image and returns model simulations.
 
 **Image Requirements:**
 - Any resolution (automatically resized to 384×384)
-- RGB or RGBA
+- Grayscale, grayscale+alpha (LA), RGB, or RGBA — alpha is preserved when present (the model relies on it for some encodings, e.g. as a background mask). The channel count of the input must match what the loaded model expects.
 
 **Request Example (cURL):**
 ```bash
@@ -199,7 +199,7 @@ console.log(result);
 **Response Fields:**
 - `simulation` (array): 2D array of simulation values with shape `[384, 384]`
   - Each value is a float representing the model's simulation for that pixel
-  - Range: `[0.0, ~10.0]` (raw model output scaled by 255)
+  - Range: raw model output (no scaling applied). For `df_default_2.0.1` this is approximately `[0.0, ~0.04]`. Apply your own scaling (e.g. `× 255`) on the client side if you need values in `[0, ~10]`.
 - `shape` (array): Dimensions of the simulation `[height, width]`
 - `status` (string): `"success"` for successful simulations
 
