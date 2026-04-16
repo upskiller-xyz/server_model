@@ -64,7 +64,7 @@ Technical specification for the Upskiller Model Server data formats.
 | **Shape** | `[1, 1, 384, 384]` |
 | **Format** | `[batch, channels, height, width]` |
 | **Dtype** | `float32` |
-| **Range** | raw model output, no rescaling. For `df_default_2.0.1` this is approximately `[0.0, ~0.04]`. |
+| **Range** | raw model output, no rescaling — approximately `[0.0, 1.0]`. |
 
 ---
 
@@ -114,18 +114,18 @@ img = np.expand_dims(img, axis=0)
 Model output is returned as-is (no rescaling) and converted to JSON:
 
 ```python
-# Model returns: [1, 1, 384, 384], raw model output (e.g. ~[0, 0.04] for df_default_2.0.1)
+# Model returns: [1, 1, 384, 384], raw model output in ~[0, 1]
 output = model(input_tensor)
 
 # Remove batch/channel dimensions only — values are NOT rescaled
-simulation = output.squeeze()  # Shape: [384, 384], raw model range
+simulation = output.squeeze()  # Shape: [384, 384], range ~[0, 1]
 
 # Convert to list for JSON
 simulation_list = simulation.tolist()
 
 # Response
 {
-  "simulation": simulation_list,  # Raw model values (apply × 255 client-side if you need [0, ~10])
+  "simulation": simulation_list,  # Raw model values in ~[0, 1]
   "shape": list(simulation.shape),
   "status": "success"
 }
@@ -203,9 +203,9 @@ print(f"Range: [{simulation.min():.4f}, {simulation.max():.4f}]")
 | After normalize | `[H, W, C]` (C ∈ {1, 3, 4}) | `float32` | `[0, 1]` |
 | After resize | `[384, 384, C]` | `float32` | `[0, 1]` |
 | **Model input** | `[1, C, 384, 384]` | `float32` | `[0, 1]` |
-| **Model output (raw)** | `[1, 1, 384, 384]` | `float32` | model-dependent (e.g. `[0, ~0.04]` for `df_default_2.0.1`) |
-| **Server output** | `[384, 384]` | `float32` | same as model output (no rescaling) |
-| JSON response | `[384, 384]` | List of floats | same as model output |
+| **Model output (raw)** | `[1, 1, 384, 384]` | `float32` | `~[0, 1]` |
+| **Server output** | `[384, 384]` | `float32` | `~[0, 1]` (no rescaling) |
+| JSON response | `[384, 384]` | List of floats | `~[0, 1]` |
 
 ### Preprocessing Steps
 

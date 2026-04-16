@@ -199,7 +199,7 @@ console.log(result);
 **Response Fields:**
 - `simulation` (array): 2D array of simulation values with shape `[384, 384]`
   - Each value is a float representing the model's simulation for that pixel
-  - Range: raw model output (no scaling applied). For `df_default_2.0.1` this is approximately `[0.0, ~0.04]`. Apply your own scaling (e.g. `× 255`) on the client side if you need values in `[0, ~10]`.
+  - Range: raw model output (no scaling applied), approximately `[0.0, 1.0]` — values are no longer rescaled by the server.
 - `shape` (array): Dimensions of the simulation `[height, width]`
 - `status` (string): `"success"` for successful simulations
 
