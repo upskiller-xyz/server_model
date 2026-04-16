@@ -105,8 +105,9 @@ class ModelSimulationService(ISimulationService):
             if model.has_cond_vec and cond_vec is None:
                 self._logger.warning(f"Model '{model_name}' expects cond_vec but none was provided")
 
-            output = model(image_np, cv)          # (1, 1, H, W)
-            output_np = output.squeeze()          # (H, W) — raw model output, no rescaling
+            output = model(image_np, cv)                          # (1, 1, H, W)
+            output_np = output.squeeze()                          # (H, W)
+            output_np = np.clip(output_np, 0.0, 10.0)            # normalize to [0, 10] DF% range
 
             self._logger.info(f"Output shape: {output_np.shape}, range: [{output_np.min():.3f}, {output_np.max():.3f}]")
 
