@@ -25,7 +25,8 @@ class ModelServerApplication:
         logger = StructuredLogger("ModelServer", LogLevel.INFO)
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
-        model_bucket = os.getenv("MODEL_BUCKET", "daylight-factor")
+        # Use 'or' operator to treat empty/whitespace env vars as unset
+        model_bucket = os.getenv("MODEL_BUCKET") or "daylight-factor"
         model_url_template = os.getenv(
             "MODEL_URL_TEMPLATE",
             f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx"
