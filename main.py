@@ -25,9 +25,10 @@ class ModelServerApplication:
         logger = StructuredLogger("ModelServer", LogLevel.INFO)
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
+        model_bucket = os.getenv("MODEL_BUCKET", "daylight-factor")
         model_url_template = os.getenv(
             "MODEL_URL_TEMPLATE",
-            "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+            f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx"
         )
 
         if model_url_template.startswith("s3://"):
