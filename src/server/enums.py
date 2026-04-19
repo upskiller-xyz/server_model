@@ -36,3 +36,11 @@ class HTTPStatus(Enum):
     OK = 200
     BAD_REQUEST = 400
     INTERNAL_SERVER_ERROR = 500
+
+
+class SpecKey(Enum):
+    """Keys used in spec.json files."""
+    ARCHITECTURE = "architecture"
+    TRAINING = "training"
+    ENCODING_VERSION = "encoding_version"
+    TARGET = "target"

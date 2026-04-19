@@ -10,7 +10,8 @@ from src.server.services.logging import StructuredLogger
 from src.server.services.download import HTTPDownloadStrategy, S3DownloadStrategy
 from src.server.services.image_processor import ImageProcessorFactory
 from src.server.services.simulation import SimulationServiceFactory
-from src.server.enums import LogLevel, ContentType, HTTPStatus
+from src.server.services.spec_service import SpecServiceFactory
+from src.server.enums import LogLevel, ContentType, HTTPStatus, SpecKey
 
 
 class ModelServerApplication:
@@ -18,6 +19,7 @@ class ModelServerApplication:
     def __init__(self):
         self._app = Flask(__name__)
         self._controller: ModelServerController = None
+        self._spec_service = None
         self._setup_dependencies()
         self._setup_routes()
 
@@ -55,15 +57,40 @@ class ModelServerApplication:
             model_url_template=model_url_template,
         )
 
+        spec_url_template = os.getenv(
+            "SPEC_URL_TEMPLATE",
+            f"s3://{model_bucket}/{{name}}/spec.json"
+        )
+        self._spec_service = SpecServiceFactory.create(
+            checkpoints_dir="./checkpoints",
+            download_strategy=download_strategy,
+            logger=logger,
+            spec_url_template=spec_url_template,
+        )
+
         self._controller = ModelServerController(simulation_service=simulation_service, logger=logger)
         self._controller.initialize()
 
     def _setup_routes(self) -> None:
         self._app.add_url_rule("/", "get_status", self._get_status, methods=["GET"])
         self._app.add_url_rule("/run", "run_simulation", self._run_simulation, methods=["POST"])
+        self._app.add_url_rule("/spec", "get_spec", self._get_spec, methods=["GET"])
 
     def _get_status(self) -> Dict[str, Any]:
         return jsonify(self._controller.get_status())
+
+    def _get_spec(self) -> Dict[str, Any]:
+        model_name = request.args.get("model")
+        if not model_name:
+            return jsonify({"error": "'model' query parameter is required"}), 400
+        try:
+            spec = self._spec_service.get_spec(model_name)
+            return jsonify({
+                "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
+                "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
+            })
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     def _run_simulation(self) -> Dict[str, Any]:
         if 'file' not in request.files:

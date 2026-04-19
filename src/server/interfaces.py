@@ -45,6 +45,11 @@ class IModelLoader(ABC):
     def get_model(self) -> Any: ...
 
 
+class ISpecService(ABC):
+    @abstractmethod
+    def get_spec(self, model_name: str) -> Dict[str, Any]: ...
+
+
 class IServerController(ABC):
     @abstractmethod
     def initialize(self) -> None: ...
