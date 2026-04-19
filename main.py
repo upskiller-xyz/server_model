@@ -10,7 +10,8 @@ from src.server.services.logging import StructuredLogger
 from src.server.services.download import HTTPDownloadStrategy, S3DownloadStrategy
 from src.server.services.image_processor import ImageProcessorFactory
 from src.server.services.simulation import SimulationServiceFactory
-from src.server.enums import LogLevel, ContentType, HTTPStatus
+from src.server.services.spec_service import SpecServiceFactory
+from src.server.enums import LogLevel, ContentType, HTTPStatus, SpecKey, EnvVar
 
 
 class ModelServerApplication:
@@ -18,6 +19,7 @@ class ModelServerApplication:
     def __init__(self):
         self._app = Flask(__name__)
         self._controller: ModelServerController = None
+        self._spec_service = None
         self._setup_dependencies()
         self._setup_routes()
 
@@ -26,23 +28,23 @@ class ModelServerApplication:
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
         # Use 'or' operator to treat empty/whitespace env vars as unset
-        model_bucket = os.getenv("MODEL_BUCKET") or "daylight-factor"
+        model_bucket = os.getenv(EnvVar.MODEL_BUCKET.value) or "daylight-factor"
         model_url_template = os.getenv(
-            "MODEL_URL_TEMPLATE",
+            EnvVar.MODEL_URL_TEMPLATE.value,
             f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx"
         )
 
         if model_url_template.startswith("s3://"):
-            access_key = os.getenv("SCW_ACCESS_KEY")
-            secret_key = os.getenv("SCW_SECRET_KEY")
+            access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
+            secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
             if not access_key or not secret_key:
-                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when MODEL_URL_TEMPLATE uses s3://")
+                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when MODEL_URL_TEMPLATE uses s3://")
             download_strategy = S3DownloadStrategy(
                 logger=logger,
                 access_key=access_key,
                 secret_key=secret_key,
-                region=os.getenv("SCW_REGION", "fr-par"),
-                endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
+                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
+                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
             )
         else:
             download_strategy = HTTPDownloadStrategy(logger)
@@ -55,15 +57,56 @@ class ModelServerApplication:
             model_url_template=model_url_template,
         )
 
+        spec_url_template = os.getenv(
+            EnvVar.SPEC_URL_TEMPLATE.value,
+            f"s3://{model_bucket}/{{name}}/spec.json"
+        )
+        if spec_url_template.startswith("s3://"):
+            spec_access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
+            spec_secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
+            if not spec_access_key or not spec_secret_key:
+                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when SPEC_URL_TEMPLATE uses s3://")
+            spec_download_strategy = S3DownloadStrategy(
+                logger=logger,
+                access_key=spec_access_key,
+                secret_key=spec_secret_key,
+                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
+                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
+            )
+        else:
+            spec_download_strategy = HTTPDownloadStrategy(logger)
+
+        self._spec_service = SpecServiceFactory.create(
+            checkpoints_dir="./checkpoints",
+            download_strategy=spec_download_strategy,
+            logger=logger,
+            spec_url_template=spec_url_template,
+        )
+
         self._controller = ModelServerController(simulation_service=simulation_service, logger=logger)
         self._controller.initialize()
 
     def _setup_routes(self) -> None:
         self._app.add_url_rule("/", "get_status", self._get_status, methods=["GET"])
         self._app.add_url_rule("/run", "run_simulation", self._run_simulation, methods=["POST"])
+        self._app.add_url_rule("/spec", "get_spec", self._get_spec, methods=["GET"])
 
     def _get_status(self) -> Dict[str, Any]:
         return jsonify(self._controller.get_status())
+
+    def _get_spec(self) -> Dict[str, Any]:
+        model_name = request.args.get("model")
+        if not model_name:
+            return jsonify({"error": "'model' query parameter is required"}), HTTPStatus.BAD_REQUEST.value
+        try:
+            spec = self._spec_service.get_spec(model_name)
+            return jsonify({
+                "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
+                "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
+            })
+        except Exception:
+            self._app.logger.exception("Failed to retrieve spec for model '%s'", model_name)
+            return jsonify({"error": "Failed to retrieve spec"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
 
     def _run_simulation(self) -> Dict[str, Any]:
         if 'file' not in request.files:
