@@ -3,7 +3,7 @@
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock
 
 from src.server.services.spec_service import ModelSpecService, SpecServiceFactory
 from src.server.enums import SpecKey
@@ -59,6 +59,22 @@ class TestModelSpecService:
 
         self.download_strategy.download.assert_not_called()
         assert result[SpecKey.ARCHITECTURE.value][SpecKey.ENCODING_VERSION.value] == "v5"
+
+    def test_template_with_extra_placeholder_raises_on_init(self):
+        with pytest.raises(ValueError, match="valid format string"):
+            self._make_service(template="s3://bucket/{name}/{other}/spec.json")
+
+    def test_get_spec_rejects_path_traversal_model_name(self, tmp_path):
+        service = self._make_service(checkpoints_dir=str(tmp_path))
+        with pytest.raises(ValueError):
+            service.get_spec("../escape")
+        self.download_strategy.download.assert_not_called()
+
+    def test_get_spec_rejects_invalid_model_name(self, tmp_path):
+        service = self._make_service(checkpoints_dir=str(tmp_path))
+        with pytest.raises(ValueError):
+            service.get_spec("invalid name with spaces")
+        self.download_strategy.download.assert_not_called()
 
     def test_get_spec_url_uses_template(self, tmp_path):
         service = self._make_service(

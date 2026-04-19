@@ -61,9 +61,24 @@ class ModelServerApplication:
             "SPEC_URL_TEMPLATE",
             f"s3://{model_bucket}/{{name}}/spec.json"
         )
+        if spec_url_template.startswith("s3://"):
+            spec_access_key = os.getenv("SCW_ACCESS_KEY")
+            spec_secret_key = os.getenv("SCW_SECRET_KEY")
+            if not spec_access_key or not spec_secret_key:
+                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when SPEC_URL_TEMPLATE uses s3://")
+            spec_download_strategy = S3DownloadStrategy(
+                logger=logger,
+                access_key=spec_access_key,
+                secret_key=spec_secret_key,
+                region=os.getenv("SCW_REGION", "fr-par"),
+                endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
+            )
+        else:
+            spec_download_strategy = HTTPDownloadStrategy(logger)
+
         self._spec_service = SpecServiceFactory.create(
             checkpoints_dir="./checkpoints",
-            download_strategy=download_strategy,
+            download_strategy=spec_download_strategy,
             logger=logger,
             spec_url_template=spec_url_template,
         )
@@ -82,15 +97,16 @@ class ModelServerApplication:
     def _get_spec(self) -> Dict[str, Any]:
         model_name = request.args.get("model")
         if not model_name:
-            return jsonify({"error": "'model' query parameter is required"}), 400
+            return jsonify({"error": "'model' query parameter is required"}), HTTPStatus.BAD_REQUEST.value
         try:
             spec = self._spec_service.get_spec(model_name)
             return jsonify({
                 "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
                 "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
             })
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except Exception:
+            self._app.logger.exception("Failed to retrieve spec for model '%s'", model_name)
+            return jsonify({"error": "Failed to retrieve spec"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
 
     def _run_simulation(self) -> Dict[str, Any]:
         if 'file' not in request.files:
