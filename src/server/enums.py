@@ -44,3 +44,14 @@ class SpecKey(Enum):
     TRAINING = "training"
     ENCODING_VERSION = "encoding_version"
     TARGET = "target"
+
+
+class EnvVar(Enum):
+    """Environment variable names."""
+    MODEL_BUCKET = "MODEL_BUCKET"
+    MODEL_URL_TEMPLATE = "MODEL_URL_TEMPLATE"
+    SPEC_URL_TEMPLATE = "SPEC_URL_TEMPLATE"
+    SCW_ACCESS_KEY = "SCW_ACCESS_KEY"
+    SCW_SECRET_KEY = "SCW_SECRET_KEY"
+    SCW_REGION = "SCW_REGION"
+    SCW_ENDPOINT_URL = "SCW_ENDPOINT_URL"

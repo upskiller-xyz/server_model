@@ -11,7 +11,7 @@ from src.server.services.download import HTTPDownloadStrategy, S3DownloadStrateg
 from src.server.services.image_processor import ImageProcessorFactory
 from src.server.services.simulation import SimulationServiceFactory
 from src.server.services.spec_service import SpecServiceFactory
-from src.server.enums import LogLevel, ContentType, HTTPStatus, SpecKey
+from src.server.enums import LogLevel, ContentType, HTTPStatus, SpecKey, EnvVar
 
 
 class ModelServerApplication:
@@ -28,23 +28,23 @@ class ModelServerApplication:
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
         # Use 'or' operator to treat empty/whitespace env vars as unset
-        model_bucket = os.getenv("MODEL_BUCKET") or "daylight-factor"
+        model_bucket = os.getenv(EnvVar.MODEL_BUCKET.value) or "daylight-factor"
         model_url_template = os.getenv(
-            "MODEL_URL_TEMPLATE",
+            EnvVar.MODEL_URL_TEMPLATE.value,
             f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx"
         )
 
         if model_url_template.startswith("s3://"):
-            access_key = os.getenv("SCW_ACCESS_KEY")
-            secret_key = os.getenv("SCW_SECRET_KEY")
+            access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
+            secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
             if not access_key or not secret_key:
-                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when MODEL_URL_TEMPLATE uses s3://")
+                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when MODEL_URL_TEMPLATE uses s3://")
             download_strategy = S3DownloadStrategy(
                 logger=logger,
                 access_key=access_key,
                 secret_key=secret_key,
-                region=os.getenv("SCW_REGION", "fr-par"),
-                endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
+                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
+                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
             )
         else:
             download_strategy = HTTPDownloadStrategy(logger)
@@ -58,20 +58,20 @@ class ModelServerApplication:
         )
 
         spec_url_template = os.getenv(
-            "SPEC_URL_TEMPLATE",
+            EnvVar.SPEC_URL_TEMPLATE.value,
             f"s3://{model_bucket}/{{name}}/spec.json"
         )
         if spec_url_template.startswith("s3://"):
-            spec_access_key = os.getenv("SCW_ACCESS_KEY")
-            spec_secret_key = os.getenv("SCW_SECRET_KEY")
+            spec_access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
+            spec_secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
             if not spec_access_key or not spec_secret_key:
-                raise EnvironmentError("SCW_ACCESS_KEY and SCW_SECRET_KEY must be set when SPEC_URL_TEMPLATE uses s3://")
+                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when SPEC_URL_TEMPLATE uses s3://")
             spec_download_strategy = S3DownloadStrategy(
                 logger=logger,
                 access_key=spec_access_key,
                 secret_key=spec_secret_key,
-                region=os.getenv("SCW_REGION", "fr-par"),
-                endpoint_url=os.getenv("SCW_ENDPOINT_URL", "https://s3.fr-par.scw.cloud"),
+                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
+                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
             )
         else:
             spec_download_strategy = HTTPDownloadStrategy(logger)
