@@ -3,6 +3,7 @@ import os
 import numpy as np
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import BadRequest
+from botocore.exceptions import ClientError
 from typing import Dict, Any, Optional
 
 from src.server.controller import ModelServerController
@@ -57,10 +58,10 @@ class ModelServerApplication:
             model_url_template=model_url_template,
         )
 
-        spec_url_template = os.getenv(
-            EnvVar.SPEC_URL_TEMPLATE.value,
-            f"s3://{model_bucket}/{{name}}/spec.json"
-        )
+        # Derive default spec URL from MODEL_URL_TEMPLATE: replace filename with spec.json
+        # e.g. s3://bucket/{name}/model.onnx -> s3://bucket/{name}/spec.json
+        default_spec_url = model_url_template.rsplit("/", 1)[0] + "/spec.json"
+        spec_url_template = os.getenv(EnvVar.SPEC_URL_TEMPLATE.value, default_spec_url)
         if spec_url_template.startswith("s3://"):
             spec_access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
             spec_secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
@@ -104,6 +105,11 @@ class ModelServerApplication:
                 "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
                 "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
             })
+        except (ClientError, FileNotFoundError) as e:
+            if isinstance(e, ClientError) and e.response["Error"]["Code"] == "404":
+                return jsonify({"error": f"spec.json not found for model '{model_name}'"}), 404
+            self._app.logger.exception("Failed to retrieve spec for model '%s'", model_name)
+            return jsonify({"error": "Failed to retrieve spec"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
         except Exception:
             self._app.logger.exception("Failed to retrieve spec for model '%s'", model_name)
             return jsonify({"error": "Failed to retrieve spec"}), HTTPStatus.INTERNAL_SERVER_ERROR.value
