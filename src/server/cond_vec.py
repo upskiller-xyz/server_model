@@ -26,6 +26,9 @@ class CondVecParser:
             parsed = json.loads(raw)
         except json.JSONDecodeError as e:
             raise ValueError("'cond_vec' is not valid JSON") from e
-        if not isinstance(parsed, list) or not all(isinstance(v, (int, float)) for v in parsed):
+        # bool is a subclass of int — exclude it so true/false aren't read as 1/0.
+        if not isinstance(parsed, list) or not all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) for v in parsed
+        ):
             raise ValueError("'cond_vec' must be a JSON array of numbers")
         return np.array(parsed, dtype=np.float32)[np.newaxis, :]

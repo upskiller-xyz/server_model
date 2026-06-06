@@ -3,6 +3,7 @@
 Relies on the fake onnxruntime registered in conftest.py.
 """
 import onnxruntime as ort
+import pytest
 from unittest.mock import MagicMock
 
 from src.server.services.simulation import ModelSimulationService
@@ -42,6 +43,12 @@ class TestResolveModelSource:
 
         assert path == tmp_path / "model1.onnx"
         assert level == ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        self.download.download.assert_not_called()
+
+    def test_rejects_invalid_model_name(self, tmp_path):
+        service = self._make_service(tmp_path)
+        with pytest.raises(ValueError):
+            service._resolve_model_source("../escape")
         self.download.download.assert_not_called()
 
     def test_downloads_when_no_local_file(self, tmp_path):

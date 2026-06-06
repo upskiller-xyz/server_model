@@ -48,6 +48,14 @@ class ServerBootstrap:
         return self._logger
 
     @staticmethod
+    def _env(name: str, default: str) -> str:
+        """Read an env var, stripped; treat empty/whitespace-only as unset."""
+        value = os.getenv(name)
+        if value is None or not value.strip():
+            return default
+        return value.strip()
+
+    @staticmethod
     def _build_download_strategy(
         url_template: str,
         logger: ILogger,
@@ -83,9 +91,9 @@ class ServerBootstrap:
         logger = StructuredLogger("ModelServer", LogLevel.INFO)
         image_processor = ImageProcessorFactory.create_standard_processor(logger)
 
-        # Use 'or' so empty/whitespace env vars are treated as unset.
-        model_bucket = os.getenv(EnvVar.MODEL_BUCKET.value) or "daylight-factor"
-        model_url_template = os.getenv(
+        # _env strips and treats empty/whitespace-only values as unset.
+        model_bucket = cls._env(EnvVar.MODEL_BUCKET.value, "daylight-factor")
+        model_url_template = cls._env(
             EnvVar.MODEL_URL_TEMPLATE.value,
             f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx",
         )
@@ -102,7 +110,7 @@ class ServerBootstrap:
         # Derive default spec URL from MODEL_URL_TEMPLATE: replace filename with spec.json
         # e.g. s3://bucket/{name}/model.onnx -> s3://bucket/{name}/spec.json
         default_spec_url = model_url_template.rsplit("/", 1)[0] + "/spec.json"
-        spec_url_template = os.getenv(EnvVar.SPEC_URL_TEMPLATE.value, default_spec_url)
+        spec_url_template = cls._env(EnvVar.SPEC_URL_TEMPLATE.value, default_spec_url)
         spec_download_strategy = cls._build_download_strategy(spec_url_template, logger)
 
         spec_service: ISpecService = SpecServiceFactory.create(

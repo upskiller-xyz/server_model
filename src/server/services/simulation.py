@@ -68,6 +68,7 @@ class ModelSimulationService(ISimulationService):
         falls back to the raw model with full optimization, downloading it first
         if it is not present locally.
         """
+        self._validate_model_name(model_name)
         optimized_path = self._checkpoints_dir / f"{model_name}{_OPTIMIZED_SUFFIX}"
         if optimized_path.exists():
             return optimized_path, ort.GraphOptimizationLevel.ORT_DISABLE_ALL
@@ -81,7 +82,6 @@ class ModelSimulationService(ISimulationService):
 
     def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
         """Load ONNX model by name, downloading if necessary."""
-        self._validate_model_name(model_name)
         model_path, optimization_level = self._resolve_model_source(model_name)
 
         providers = [p for p in ['CUDAExecutionProvider', 'CPUExecutionProvider']

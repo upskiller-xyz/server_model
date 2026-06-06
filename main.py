@@ -1,4 +1,5 @@
 import numpy as np
+import requests
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import BadRequest
 from botocore.exceptions import ClientError
@@ -42,8 +43,12 @@ class ModelServerApplication:
                 "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
                 "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
             })
-        except (ClientError, FileNotFoundError) as e:
-            if isinstance(e, ClientError) and e.response["Error"]["Code"] == "404":
+        except (ClientError, FileNotFoundError, requests.exceptions.HTTPError) as e:
+            is_404 = (
+                (isinstance(e, ClientError) and e.response["Error"]["Code"] == "404")
+                or (isinstance(e, requests.exceptions.HTTPError) and e.response is not None and e.response.status_code == 404)
+            )
+            if is_404:
                 return jsonify({"error": f"spec.json not found for model '{model_name}'"}), 404
             self._app.logger.exception("Failed to retrieve spec for model '%s'", model_name)
             return jsonify({"error": "Failed to retrieve spec"}), HTTPStatus.INTERNAL_SERVER_ERROR.value

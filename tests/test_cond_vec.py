@@ -39,3 +39,8 @@ class TestCondVecParser:
     def test_nested_list_element_rejected(self):
         with pytest.raises(ValueError, match="array of numbers"):
             CondVecParser.parse("[[1, 2], [3, 4]]")
+
+    def test_boolean_element_rejected(self):
+        # JSON booleans are ints in Python but must not pass as numbers.
+        with pytest.raises(ValueError, match="array of numbers"):
+            CondVecParser.parse("[true, false]")

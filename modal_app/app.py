@@ -13,6 +13,7 @@ single host keeps the orchestrator a config-only change.
 from typing import Any, Dict, Optional
 
 import modal
+import requests
 from botocore.exceptions import ClientError
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -25,6 +26,15 @@ from . import config
 from .image import image, runtime_secrets
 
 app = modal.App(config.APP_NAME)
+
+
+def _spec_not_found(error: Exception) -> bool:
+    """True if a spec fetch error means 'no spec.json' (S3 or HTTP 404)."""
+    if isinstance(error, ClientError):
+        return error.response["Error"]["Code"] == "404"
+    if isinstance(error, requests.exceptions.HTTPError):
+        return error.response is not None and error.response.status_code == 404
+    return False
 
 
 _cls_kwargs = dict(
@@ -102,8 +112,8 @@ class InferenceService:
         def spec(model: str) -> Dict[str, Any]:
             try:
                 spec_data = ctx.spec_service.get_spec(model)
-            except (ClientError, FileNotFoundError) as e:
-                if isinstance(e, ClientError) and e.response["Error"]["Code"] == "404":
+            except (ClientError, FileNotFoundError, requests.exceptions.HTTPError) as e:
+                if _spec_not_found(e):
                     raise HTTPException(status_code=404, detail=f"spec.json not found for model '{model}'")
                 ctx.logger.error(f"Failed to retrieve spec for model '{model}': {e}")
                 raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Failed to retrieve spec")

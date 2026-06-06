@@ -62,6 +62,18 @@ class TestFromEnv:
         assert isinstance(bootstrap.spec_service, ModelSpecService)
         assert bootstrap.spec_service._spec_url_template == "s3://bucket/{name}/spec.json"
 
+    def test_whitespace_env_treated_as_unset(self, monkeypatch, tmp_path):
+        # Whitespace-only MODEL_URL_TEMPLATE must fall back to the default,
+        # not be used verbatim (which would be an invalid template).
+        monkeypatch.setenv(EnvVar.MODEL_URL_TEMPLATE.value, "   ")
+        monkeypatch.setenv(EnvVar.SPEC_URL_TEMPLATE.value, "https://host/{name}/spec.json")
+        monkeypatch.setenv(EnvVar.MODEL_BUCKET.value, "daylight-factor")
+
+        bootstrap = ServerBootstrap.from_env(checkpoints_dir=str(tmp_path))
+
+        sim = bootstrap.controller._simulation_service
+        assert sim._model_url_template == "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+
     def test_simulation_service_is_model_simulation_service(self, monkeypatch, tmp_path):
         monkeypatch.setenv(EnvVar.MODEL_URL_TEMPLATE.value, "https://host/models/{name}/model.onnx")
         monkeypatch.setenv(EnvVar.SPEC_URL_TEMPLATE.value, "https://host/models/{name}/spec.json")
