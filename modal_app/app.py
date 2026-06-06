@@ -15,7 +15,7 @@ from typing import Any, Dict, Optional
 import modal
 import requests
 from botocore.exceptions import ClientError
-from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from src.server.bootstrap import ServerBootstrap
@@ -92,7 +92,7 @@ class InferenceService:
 
         @api.post("/run")
         async def run(
-            file: UploadFile,
+            file: UploadFile = File(...),
             model: str = Form(...),
             cond_vec: Optional[str] = Form(None),
         ) -> Dict[str, Any]:

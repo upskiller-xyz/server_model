@@ -107,9 +107,11 @@ class ServerBootstrap:
             model_url_template=model_url_template,
         )
 
-        # Derive default spec URL from MODEL_URL_TEMPLATE: replace filename with spec.json
-        # e.g. s3://bucket/{name}/model.onnx -> s3://bucket/{name}/spec.json
-        default_spec_url = model_url_template.rsplit("/", 1)[0] + "/spec.json"
+        # Derive default spec URL from MODEL_URL_TEMPLATE, always preserving {name}:
+        #   .../{name}/model.onnx -> .../{name}/spec.json   ({name} already in base)
+        #   .../models/{name}.onnx -> .../models/{name}/spec.json  (nest under {name})
+        base = model_url_template.rsplit("/", 1)[0]
+        default_spec_url = f"{base}/spec.json" if "{name}" in base else f"{base}/{{name}}/spec.json"
         spec_url_template = cls._env(EnvVar.SPEC_URL_TEMPLATE.value, default_spec_url)
         spec_download_strategy = cls._build_download_strategy(spec_url_template, logger)
 

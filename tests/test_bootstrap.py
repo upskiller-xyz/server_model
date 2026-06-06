@@ -66,13 +66,22 @@ class TestFromEnv:
         # Whitespace-only MODEL_URL_TEMPLATE must fall back to the default,
         # not be used verbatim (which would be an invalid template).
         monkeypatch.setenv(EnvVar.MODEL_URL_TEMPLATE.value, "   ")
-        monkeypatch.setenv(EnvVar.SPEC_URL_TEMPLATE.value, "https://host/{name}/spec.json")
+        monkeypatch.delenv(EnvVar.SPEC_URL_TEMPLATE.value, raising=False)
         monkeypatch.setenv(EnvVar.MODEL_BUCKET.value, "daylight-factor")
 
         bootstrap = ServerBootstrap.from_env(checkpoints_dir=str(tmp_path))
 
         sim = bootstrap.controller._simulation_service
         assert sim._model_url_template == "https://daylight-factor.s3.fr-par.scw.cloud/models/{name}.onnx"
+
+    def test_default_spec_url_preserves_name_for_filename_style_template(self, monkeypatch, tmp_path):
+        # Filename-style model template must still derive a spec URL with {name}.
+        monkeypatch.setenv(EnvVar.MODEL_URL_TEMPLATE.value, "https://host/models/{name}.onnx")
+        monkeypatch.delenv(EnvVar.SPEC_URL_TEMPLATE.value, raising=False)
+
+        bootstrap = ServerBootstrap.from_env(checkpoints_dir=str(tmp_path))
+
+        assert bootstrap.spec_service._spec_url_template == "https://host/models/{name}/spec.json"
 
     def test_simulation_service_is_model_simulation_service(self, monkeypatch, tmp_path):
         monkeypatch.setenv(EnvVar.MODEL_URL_TEMPLATE.value, "https://host/models/{name}/model.onnx")
