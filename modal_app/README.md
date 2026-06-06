@@ -6,43 +6,52 @@ the GPU equivalent of `main.py`.
 
 ## Endpoints
 
-Same contract as the Flask server (only the base URL changes):
+Single ASGI app under one host, same contract as the Flask server (clients only
+change the base URL):
 
-| Method | Path      | Container | Notes                                   |
-|--------|-----------|-----------|-----------------------------------------|
-| POST   | `/run`    | GPU (L4)  | multipart: `file`, `model`, `cond_vec?` |
-| GET    | `/spec`   | CPU       | `?model=<name>`                         |
-| GET    | `/status` | CPU       | health / version                        |
+| Method | Path      | Notes                                   |
+|--------|-----------|-----------------------------------------|
+| POST   | `/run`    | multipart: `file`, `model`, `cond_vec?` |
+| GET    | `/spec`   | `?model=<name>`                         |
+| GET    | `/status` | health / version                        |
 
-GPU inference and the cheap metadata endpoints run on separate containers, so a
-spec lookup or health check never starts an L4.
+All routes share one GPU (L4) container. Serving them under one host keeps a
+downstream caller (e.g. the `server_lux` orchestrator, which builds
+`{MODEL_SERVICE_URL}/run` and `/spec`) a config-only change — just point
+`MODEL_SERVICE_URL` at the Modal URL. The trade-off is that `/spec` and `/status`
+also run on the GPU container (cheap, but they start an L4).
 
 ## One-time setup
 
-1. Install + authenticate:
+1. Install + authenticate (writes credentials to `~/.modal.toml`):
    ```
    pip install modal && modal token new
    ```
-2. Create the Scaleway secret (used at build time for baking models and at
-   runtime for download-on-demand):
+2. Configure URLs and baked models in `config.py`:
+   - `BAKED_MODELS` — models to bake into the image (default: `df_default_2.0.2`).
+   - `MODEL_URL_TEMPLATE` — defaults to the public Scaleway bucket over HTTPS.
+   - `SPEC_URL_TEMPLATE` — set to where `spec.json` actually lives (the `/spec`
+     endpoint needs this; `/run` does not).
+
+   The default bucket is public HTTPS, so **no Scaleway credentials are needed**.
+
+3. *(Only for a private `s3://` bucket.)* Create a Scaleway secret and point
+   `config.SECRET_NAME` at it:
    ```
    modal secret create upskiller-scaleway \
      SCW_ACCESS_KEY=... \
-     SCW_SECRET_KEY=... \
-     MODEL_URL_TEMPLATE='s3://daylight-factor/models/{name}.onnx' \
-     SPEC_URL_TEMPLATE='s3://daylight-factor/models/{name}/spec.json'
+     SCW_SECRET_KEY=...
    ```
-   The secret name must match `config.SECRET_NAME`.
-3. List the models to bake into the image in `config.BAKED_MODELS`. Anything not
-   baked still works via download-on-demand (slower first request).
+   Then set `MODEL_URL_TEMPLATE` / `BUILD_MODEL_URL_TEMPLATE` to `s3://...` forms.
 
 ## Deploy
 
-Run from the repository root (paths in `image.py` are relative to cwd):
+Run from the repository root in **module mode** (`-m`) — the package uses
+relative imports, and paths in `image.py` are relative to cwd:
 
 ```
-modal serve modal_app/app.py     # dev: temporary URL, hot reload
-modal deploy modal_app/app.py    # production
+modal serve -m modal_app.app     # dev: temporary URL, hot reload
+modal deploy -m modal_app.app    # production
 ```
 
 ## Storage model (hybrid)

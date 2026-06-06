@@ -1,22 +1,33 @@
-"""Modal image and shared resources (Secret) for the deployment.
+"""Modal image and shared resources for the deployment.
 
-The image installs the GPU ONNX runtime stack, bakes the configured models in
-at build time, then mounts the application source for runtime use.
+The image installs the GPU ONNX runtime stack, sets the non-sensitive runtime
+env, bakes the configured models in at build time (download + ORT optimization),
+then mounts the application source for runtime use.
 """
 import modal
 
 from . import config
 from .build import download_baked_models, optimize_baked_models
 
-# Scaleway credentials + URL templates, injected as environment variables into
-# both the build step and the running containers.
-scaleway_secret = modal.Secret.from_name(config.SECRET_NAME)
+# Scaleway credentials, only for a private bucket. Empty for the public HTTPS
+# bucket. Attached to both the build download step and the runtime containers.
+runtime_secrets = (
+    [modal.Secret.from_name(config.SECRET_NAME)] if config.SECRET_NAME else []
+)
 
 image = (
-    modal.Image.debian_slim(python_version="3.11")
-    # OpenCV runtime libs (mirrors the Docker base).
+    # CUDA base image: onnxruntime-gpu needs the CUDA 12 / cuDNN 9 shared libs
+    # (libcublasLt.so.12 etc.) which debian_slim lacks. Tag matches ORT's CUDA
+    # 12.x + cuDNN 9.x requirement for onnxruntime-gpu >= 1.20.
+    modal.Image.from_registry(
+        "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04",
+        add_python="3.11",
+    )
+    # OpenCV runtime libs.
     .apt_install("libgl1", "libglib2.0-0", "libgomp1")
     .pip_install_from_requirements("requirements.modal.txt")
+    # Non-sensitive config read by ServerBootstrap.from_env() at runtime.
+    .env(config.RUNTIME_ENV)
     # Bake the configured models into BAKED_CHECKPOINTS_DIR at build time.
     .run_function(
         download_baked_models,
@@ -25,7 +36,7 @@ image = (
             config.BUILD_MODEL_URL_TEMPLATE,
             config.BAKED_CHECKPOINTS_DIR,
         ),
-        secrets=[scaleway_secret],
+        secrets=runtime_secrets,
     )
     # Pre-build the optimized graph on a GPU so it targets CUDAExecutionProvider.
     .run_function(

@@ -1,19 +1,20 @@
 """Modal adapter — the Modal-native equivalent of main.py.
 
-Exposes the same HTTP contract as the Flask server so clients only change the
-base URL:
-  - POST /run   (multipart: file, model, optional cond_vec)  -> GPU container
-  - GET  /spec  (?model=...)                                 -> CPU container
-  - GET  /status                                             -> CPU container
+Serves the same HTTP contract as the Flask server, as a single ASGI app under
+one host so clients only change the base URL:
+  - POST /run    (multipart: file, model, optional cond_vec)
+  - GET  /spec   (?model=...)
+  - GET  /status
 
-GPU inference and the cheap metadata endpoints run on separate containers so a
-health check or spec lookup never spins up an L4.
+Everything runs on one GPU container. The cheap metadata routes (/spec, /status)
+share it; for the daylight-factor flow the extra GPU time is negligible and the
+single host keeps the orchestrator a config-only change.
 """
 from typing import Any, Dict, Optional
 
 import modal
 from botocore.exceptions import ClientError
-from fastapi import Form, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from src.server.bootstrap import ServerBootstrap
@@ -21,24 +22,43 @@ from src.server.cond_vec import CondVecParser
 from src.server.enums import ContentType, HTTPStatus, SpecKey
 
 from . import config
-from .image import image, scaleway_secret
+from .image import image, runtime_secrets
 
 app = modal.App(config.APP_NAME)
 
 
-@app.cls(
+_cls_kwargs = dict(
     image=image,
     gpu=config.GPU,
-    secrets=[scaleway_secret],
+    secrets=runtime_secrets,
     scaledown_window=config.SCALEDOWN_WINDOW,
     min_containers=config.MIN_CONTAINERS,
+    enable_memory_snapshot=config.ENABLE_MEMORY_SNAPSHOT,
 )
+if config.ENABLE_GPU_SNAPSHOT:
+    _cls_kwargs["experimental_options"] = {"enable_gpu_snapshot": True}
+
+
+@app.cls(**_cls_kwargs)
 class InferenceService:
-    """GPU container running ONNX daylight-factor inference."""
+    """GPU container serving inference plus the metadata routes."""
+
+    @modal.enter(snap=True)
+    def setup(self) -> None:
+        # CPU-side wiring (imports, service wiring), captured in the snapshot.
+        self._ctx = ServerBootstrap.from_env(checkpoints_dir=config.BAKED_CHECKPOINTS_DIR)
+        # With GPU snapshots, create the CUDA session here too so it is captured.
+        if config.ENABLE_GPU_SNAPSHOT:
+            self._warm_gpu()
 
     @modal.enter()
-    def load(self) -> None:
-        self._ctx = ServerBootstrap.from_env(checkpoints_dir=config.BAKED_CHECKPOINTS_DIR)
+    def warm_gpu_post_restore(self) -> None:
+        # Without GPU snapshots, the CUDA session must be created after restore
+        # (snapshots run without a GPU attached).
+        if not config.ENABLE_GPU_SNAPSHOT:
+            self._warm_gpu()
+
+    def _warm_gpu(self) -> None:
         self._verify_gpu()
         for name in config.BAKED_MODELS:
             self._ctx.controller.preload_model(name)
@@ -51,54 +71,45 @@ class InferenceService:
         if "CUDAExecutionProvider" not in providers:
             self._ctx.logger.warning("CUDAExecutionProvider unavailable — inference will run on CPU")
 
-    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=config.REQUIRES_PROXY_AUTH)
-    async def run(
-        self,
-        file: UploadFile,
-        model: str = Form(...),
-        cond_vec: Optional[str] = Form(None),
-    ) -> Dict[str, Any]:
-        if not ContentType.is_image(file.content_type or ""):
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="File must be an image")
+    @modal.asgi_app(requires_proxy_auth=config.REQUIRES_PROXY_AUTH)
+    def web(self) -> FastAPI:
+        api = FastAPI(title="Upskiller Model Server")
+        ctx = self._ctx
 
-        try:
-            cv = CondVecParser.parse(cond_vec)
-        except ValueError as e:
-            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e))
-        image_bytes = await file.read()
-        result = self._ctx.controller.handle_simulation_request(image_bytes, model, cv)
+        @api.get("/status")
+        def status() -> Dict[str, Any]:
+            return ctx.controller.get_status()
 
-        if result.get("status") == "error":
-            return JSONResponse(result, status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
-        return result
+        @api.post("/run")
+        async def run(
+            file: UploadFile,
+            model: str = Form(...),
+            cond_vec: Optional[str] = Form(None),
+        ) -> Dict[str, Any]:
+            if not ContentType.is_image(file.content_type or ""):
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="File must be an image")
+            try:
+                cv = CondVecParser.parse(cond_vec)
+            except ValueError as e:
+                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e))
+            image_bytes = await file.read()
+            result = ctx.controller.handle_simulation_request(image_bytes, model, cv)
+            if result.get("status") == "error":
+                return JSONResponse(result, status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
+            return result
 
+        @api.get("/spec")
+        def spec(model: str) -> Dict[str, Any]:
+            try:
+                spec_data = ctx.spec_service.get_spec(model)
+            except (ClientError, FileNotFoundError) as e:
+                if isinstance(e, ClientError) and e.response["Error"]["Code"] == "404":
+                    raise HTTPException(status_code=404, detail=f"spec.json not found for model '{model}'")
+                ctx.logger.error(f"Failed to retrieve spec for model '{model}': {e}")
+                raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Failed to retrieve spec")
+            return {
+                "encoding_scheme": spec_data.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
+                "encoder_model_type": spec_data.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
+            }
 
-@app.cls(
-    image=image,
-    secrets=[scaleway_secret],
-    scaledown_window=config.SCALEDOWN_WINDOW,
-)
-class MetadataService:
-    """CPU container for status and spec lookups (no GPU needed)."""
-
-    @modal.enter()
-    def load(self) -> None:
-        self._ctx = ServerBootstrap.from_env(checkpoints_dir=config.BAKED_CHECKPOINTS_DIR)
-
-    @modal.fastapi_endpoint(method="GET", requires_proxy_auth=config.REQUIRES_PROXY_AUTH)
-    def status(self) -> Dict[str, Any]:
-        return self._ctx.controller.get_status()
-
-    @modal.fastapi_endpoint(method="GET", requires_proxy_auth=config.REQUIRES_PROXY_AUTH)
-    def spec(self, model: str) -> Dict[str, Any]:
-        try:
-            spec = self._ctx.spec_service.get_spec(model)
-        except (ClientError, FileNotFoundError) as e:
-            if isinstance(e, ClientError) and e.response["Error"]["Code"] == "404":
-                raise HTTPException(status_code=404, detail=f"spec.json not found for model '{model}'")
-            self._ctx.logger.error(f"Failed to retrieve spec for model '{model}': {e}")
-            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Failed to retrieve spec")
-        return {
-            "encoding_scheme": spec.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
-            "encoder_model_type": spec.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
-        }
+        return api
