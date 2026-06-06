@@ -36,7 +36,8 @@ class TestModelSpecService:
     def test_get_spec_downloads_when_not_cached(self, tmp_path):
         service = self._make_service(checkpoints_dir=str(tmp_path))
 
-        spec_file = tmp_path / "my-model.json"
+        # Downloads use an atomic write: fetch to a .tmp sibling, then rename.
+        tmp_file = tmp_path / "my-model.json.tmp"
 
         def fake_download(url, local_path):
             Path(local_path).write_text(json.dumps(VALID_SPEC))
@@ -46,7 +47,7 @@ class TestModelSpecService:
         result = service.get_spec("my-model")
 
         self.download_strategy.download.assert_called_once_with(
-            "s3://bucket/my-model/spec.json", str(spec_file)
+            "s3://bucket/my-model/spec.json", str(tmp_file)
         )
         assert result[SpecKey.ARCHITECTURE.value][SpecKey.ENCODING_VERSION.value] == "v5"
         assert result[SpecKey.TRAINING.value][SpecKey.TARGET.value] == "df_default"

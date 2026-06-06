@@ -36,6 +36,11 @@ class ISimulationService(ABC):
         cond_vec: Optional[np.ndarray] = None,
     ) -> Dict[str, Any]: ...
 
+    @abstractmethod
+    def preload(self, model_name: str) -> None:
+        """Eagerly load (and cache) a model's session ahead of the first request."""
+        ...
+
 
 class IModelLoader(ABC):
     @abstractmethod

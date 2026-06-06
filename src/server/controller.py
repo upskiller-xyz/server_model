@@ -26,6 +26,10 @@ class ModelServerController(IServerController):
     def get_status(self) -> Dict[str, Any]:
         return {"name": self._name, "version": self._version, "status": self._status.value}
 
+    def preload_model(self, model_name: str) -> None:
+        """Warm a model's session ahead of the first request."""
+        self._simulation_service.preload(model_name)
+
     def handle_simulation_request(
         self,
         image_bytes: bytes,

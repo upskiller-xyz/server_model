@@ -1,18 +1,13 @@
-import json
-import os
 import numpy as np
 from flask import Flask, request, jsonify
 from werkzeug.exceptions import BadRequest
 from botocore.exceptions import ClientError
 from typing import Dict, Any, Optional
 
+from src.server.bootstrap import ServerBootstrap
+from src.server.cond_vec import CondVecParser
 from src.server.controller import ModelServerController
-from src.server.services.logging import StructuredLogger
-from src.server.services.download import HTTPDownloadStrategy, S3DownloadStrategy
-from src.server.services.image_processor import ImageProcessorFactory
-from src.server.services.simulation import SimulationServiceFactory
-from src.server.services.spec_service import SpecServiceFactory
-from src.server.enums import LogLevel, ContentType, HTTPStatus, SpecKey, EnvVar
+from src.server.enums import ContentType, HTTPStatus, SpecKey
 
 
 class ModelServerApplication:
@@ -25,67 +20,9 @@ class ModelServerApplication:
         self._setup_routes()
 
     def _setup_dependencies(self) -> None:
-        logger = StructuredLogger("ModelServer", LogLevel.INFO)
-        image_processor = ImageProcessorFactory.create_standard_processor(logger)
-
-        # Use 'or' operator to treat empty/whitespace env vars as unset
-        model_bucket = os.getenv(EnvVar.MODEL_BUCKET.value) or "daylight-factor"
-        model_url_template = os.getenv(
-            EnvVar.MODEL_URL_TEMPLATE.value,
-            f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx"
-        )
-
-        if model_url_template.startswith("s3://"):
-            access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
-            secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
-            if not access_key or not secret_key:
-                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when MODEL_URL_TEMPLATE uses s3://")
-            download_strategy = S3DownloadStrategy(
-                logger=logger,
-                access_key=access_key,
-                secret_key=secret_key,
-                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
-                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
-            )
-        else:
-            download_strategy = HTTPDownloadStrategy(logger)
-
-        simulation_service = SimulationServiceFactory.create(
-            checkpoints_dir="./checkpoints",
-            download_strategy=download_strategy,
-            image_processor=image_processor,
-            logger=logger,
-            model_url_template=model_url_template,
-        )
-
-        # Derive default spec URL from MODEL_URL_TEMPLATE: replace filename with spec.json
-        # e.g. s3://bucket/{name}/model.onnx -> s3://bucket/{name}/spec.json
-        default_spec_url = model_url_template.rsplit("/", 1)[0] + "/spec.json"
-        spec_url_template = os.getenv(EnvVar.SPEC_URL_TEMPLATE.value, default_spec_url)
-        if spec_url_template.startswith("s3://"):
-            spec_access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
-            spec_secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
-            if not spec_access_key or not spec_secret_key:
-                raise EnvironmentError(f"{EnvVar.SCW_ACCESS_KEY.value} and {EnvVar.SCW_SECRET_KEY.value} must be set when SPEC_URL_TEMPLATE uses s3://")
-            spec_download_strategy = S3DownloadStrategy(
-                logger=logger,
-                access_key=spec_access_key,
-                secret_key=spec_secret_key,
-                region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
-                endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
-            )
-        else:
-            spec_download_strategy = HTTPDownloadStrategy(logger)
-
-        self._spec_service = SpecServiceFactory.create(
-            checkpoints_dir="./checkpoints",
-            download_strategy=spec_download_strategy,
-            logger=logger,
-            spec_url_template=spec_url_template,
-        )
-
-        self._controller = ModelServerController(simulation_service=simulation_service, logger=logger)
-        self._controller.initialize()
+        bootstrap = ServerBootstrap.from_env(checkpoints_dir="./checkpoints")
+        self._controller = bootstrap.controller
+        self._spec_service = bootstrap.spec_service
 
     def _setup_routes(self) -> None:
         self._app.add_url_rule("/", "get_status", self._get_status, methods=["GET"])
@@ -127,16 +64,10 @@ class ModelServerApplication:
             raise BadRequest("'model' form field is required (e.g. 'df_default_2.0.1')")
 
         # Optional cond_vec for V5 models — JSON array, e.g. "[0.5, 0.3, 0.8, 0.6, 0.9, 0.4]"
-        cond_vec: Optional[np.ndarray] = None
-        raw_cond = request.form.get('cond_vec')
-        if raw_cond:
-            try:
-                parsed = json.loads(raw_cond)
-                if not isinstance(parsed, list) or not all(isinstance(v, (int, float)) for v in parsed):
-                    raise BadRequest("'cond_vec' must be a JSON array of numbers")
-                cond_vec = np.array(parsed, dtype=np.float32)[np.newaxis, :]  # (1, D)
-            except json.JSONDecodeError:
-                raise BadRequest("'cond_vec' is not valid JSON")
+        try:
+            cond_vec: Optional[np.ndarray] = CondVecParser.parse(request.form.get('cond_vec'))
+        except ValueError as e:
+            raise BadRequest(str(e))
 
         image_bytes = file.read()
         result = self._controller.handle_simulation_request(image_bytes, model_name, cond_vec)
