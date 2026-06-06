@@ -1,0 +1,22 @@
+# Modal deployment dependencies (GPU inference).
+# Differs from requirements.txt: onnxruntime-GPU instead of CPU, no torch
+# (TorchScript loader is unused on the Modal path), FastAPI for web endpoints,
+# no Flask/gunicorn (Modal serves the endpoints).
+
+# ONNX Runtime — GPU build (CUDAExecutionProvider). Falls back to CPU when no GPU.
+onnxruntime-gpu>=1.20.1
+
+# Web endpoints (Modal @fastapi_endpoint)
+fastapi[standard]>=0.110.0
+python-multipart>=0.0.9
+
+# Image processing
+opencv-python-headless>=4.12.0.88
+Pillow>=10.0.0
+
+# NumPy (required by ONNX Runtime)
+numpy>=1.24.0
+
+# HTTP + S3 (download-on-demand fallback for non-baked models)
+requests>=2.32.0
+boto3>=1.34.0

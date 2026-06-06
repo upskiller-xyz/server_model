@@ -13,6 +13,10 @@ _MAX_CACHED_MODELS = 10
 
 _MODEL_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
+# Suffix for a graph pre-optimized at image-build time. When present it is loaded
+# with optimizations disabled (they are already applied), shortening init.
+_OPTIMIZED_SUFFIX = ".opt.onnx"
+
 
 class ModelSimulationService(ISimulationService):
     """
@@ -56,24 +60,38 @@ class ModelSimulationService(ISimulationService):
         if not resolved.is_relative_to(self._checkpoints_dir.resolve()):
             raise ValueError(f"Model path escapes checkpoints directory: '{model_name}'")
 
-    def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
-        """Load ONNX model by name, downloading if necessary."""
-        self._validate_model_name(model_name)
-        local_path = self._checkpoints_dir / f"{model_name}.onnx"
+    def _resolve_model_source(self, model_name: str) -> tuple[Path, "ort.GraphOptimizationLevel"]:
+        """Resolve the model file and the optimization level to load it with.
 
+        Prefers a graph pre-optimized at build time ({name}.opt.onnx), loaded
+        with optimizations disabled since they are already applied. Otherwise
+        falls back to the raw model with full optimization, downloading it first
+        if it is not present locally.
+        """
+        self._validate_model_name(model_name)
+        optimized_path = self._checkpoints_dir / f"{model_name}{_OPTIMIZED_SUFFIX}"
+        if optimized_path.exists():
+            return optimized_path, ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+
+        local_path = self._checkpoints_dir / f"{model_name}.onnx"
         if not local_path.exists():
             url = self._model_url_template.format(name=model_name)
             self._logger.info(f"Downloading model '{model_name}' from {url}")
             self._download_strategy.download(url, str(local_path))
+        return local_path, ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+    def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
+        """Load ONNX model by name, downloading if necessary."""
+        model_path, optimization_level = self._resolve_model_source(model_name)
 
         providers = [p for p in ['CUDAExecutionProvider', 'CPUExecutionProvider']
                      if p in ort.get_available_providers()]
         session_options = ort.SessionOptions()
-        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        session = ort.InferenceSession(str(local_path), sess_options=session_options, providers=providers)
+        session_options.graph_optimization_level = optimization_level
+        session = ort.InferenceSession(str(model_path), sess_options=session_options, providers=providers)
 
         wrapper = ONNXInferenceWrapper(session)
-        self._logger.info(f"Model '{model_name}' loaded (provider: {session.get_providers()[0]}, has_cond_vec: {wrapper.has_cond_vec})")
+        self._logger.info(f"Model '{model_name}' loaded from {model_path.name} (provider: {session.get_providers()[0]}, has_cond_vec: {wrapper.has_cond_vec})")
         return wrapper
 
     def _get_model(self, model_name: str) -> ONNXInferenceWrapper:
@@ -88,6 +106,10 @@ class ModelSimulationService(ISimulationService):
                 self._logger.info(f"Cache full — evicted model '{evicted}'")
             self._cache[model_name] = wrapper
             return wrapper
+
+    def preload(self, model_name: str) -> None:
+        """Eagerly load and cache a model's session (warms first-request latency)."""
+        self._get_model(model_name)
 
     def simulate(
         self,
