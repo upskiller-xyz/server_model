@@ -5,6 +5,7 @@ one host so clients only change the base URL:
   - POST /run    (multipart: file, model, optional cond_vec)
   - GET  /spec   (?model=...)
   - GET  /status
+  - GET  /warm   (prewarm trigger; no inference)
 
 Everything runs on one GPU container. The cheap metadata routes (/spec, /status)
 share it; for the daylight-factor flow the extra GPU time is negligible and the
@@ -83,52 +84,60 @@ class InferenceService:
 
     @modal.asgi_app(requires_proxy_auth=config.REQUIRES_PROXY_AUTH)
     def web(self) -> FastAPI:
-        api = FastAPI(title="Upskiller Model Server")
-        ctx = self._ctx
+        return build_api(self._ctx)
 
-        @api.get("/status")
-        def status() -> Dict[str, Any]:
-            return ctx.controller.get_status()
 
-        @api.get("/warm")
-        def warm() -> Dict[str, Any]:
-            # Prewarm-trigger: att nå denna route har redan kört @modal.enter
-            # (setup + GPU-warm/model-preload), så ett 200 här betyder att containern
-            # är varm. Gör ingen inferens. Façaden pingar denna fire-and-forget vid
-            # request-entry så GPU-kallstarten överlappar CPU-arbetet i stället för
-            # att betalas serialiserat på /spec eller /run. Se infra.lux/docs/experiments.md.
-            return {"warm": True}
+def build_api(ctx: Any) -> FastAPI:
+    """Build the model server's FastAPI app from a runtime context.
 
-        @api.post("/run")
-        async def run(
-            file: UploadFile = File(...),
-            model: str = Form(...),
-            cond_vec: Optional[str] = Form(None),
-        ) -> Dict[str, Any]:
-            if not ContentType.is_image(file.content_type or ""):
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="File must be an image")
-            try:
-                cv = CondVecParser.parse(cond_vec)
-            except ValueError as e:
-                raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e))
-            image_bytes = await file.read()
-            result = ctx.controller.handle_simulation_request(image_bytes, model, cv)
-            if result.get("status") == "error":
-                return JSONResponse(result, status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
-            return result
+    Extracted from the Modal ``web()`` method so the routes are unit-testable with a
+    plain FastAPI TestClient (pass a stub ctx exposing ``.controller`` /
+    ``.spec_service``) — no Modal runtime needed.
+    """
+    api = FastAPI(title="Upskiller Model Server")
 
-        @api.get("/spec")
-        def spec(model: str) -> Dict[str, Any]:
-            try:
-                spec_data = ctx.spec_service.get_spec(model)
-            except (ClientError, FileNotFoundError, requests.exceptions.HTTPError) as e:
-                if _spec_not_found(e):
-                    raise HTTPException(status_code=404, detail=f"spec.json not found for model '{model}'")
-                ctx.logger.error(f"Failed to retrieve spec for model '{model}': {e}")
-                raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Failed to retrieve spec")
-            return {
-                "encoding_scheme": spec_data.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
-                "encoder_model_type": spec_data.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
-            }
+    @api.get("/status")
+    def status() -> Dict[str, Any]:
+        return ctx.controller.get_status()
 
-        return api
+    @api.get("/warm")
+    def warm() -> Dict[str, Any]:
+        # Prewarm trigger: reaching this route has already run @modal.enter (setup +
+        # GPU/model preload), so a 200 means the container is warm. Does no inference.
+        # The orchestrator pings this fire-and-forget at request entry so the GPU cold
+        # start overlaps the CPU stages instead of being paid serially on /spec or /run.
+        return {"warm": True}
+
+    @api.post("/run")
+    async def run(
+        file: UploadFile = File(...),
+        model: str = Form(...),
+        cond_vec: Optional[str] = Form(None),
+    ) -> Dict[str, Any]:
+        if not ContentType.is_image(file.content_type or ""):
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="File must be an image")
+        try:
+            cv = CondVecParser.parse(cond_vec)
+        except ValueError as e:
+            raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e))
+        image_bytes = await file.read()
+        result = ctx.controller.handle_simulation_request(image_bytes, model, cv)
+        if result.get("status") == "error":
+            return JSONResponse(result, status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
+        return result
+
+    @api.get("/spec")
+    def spec(model: str) -> Dict[str, Any]:
+        try:
+            spec_data = ctx.spec_service.get_spec(model)
+        except (ClientError, FileNotFoundError, requests.exceptions.HTTPError) as e:
+            if _spec_not_found(e):
+                raise HTTPException(status_code=404, detail=f"spec.json not found for model '{model}'")
+            ctx.logger.error(f"Failed to retrieve spec for model '{model}': {e}")
+            raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value, detail="Failed to retrieve spec")
+        return {
+            "encoding_scheme": spec_data.get(SpecKey.ARCHITECTURE.value, {}).get(SpecKey.ENCODING_VERSION.value),
+            "encoder_model_type": spec_data.get(SpecKey.TRAINING.value, {}).get(SpecKey.TARGET.value),
+        }
+
+    return api
