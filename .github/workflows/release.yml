@@ -35,7 +35,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0 # release.sh needs full history + tags for `git describe`
       - uses: upskiller-xyz/infra.lux/.github/actions/release@3f016f104915545e7ae6b0ac9c59711456a800c6 # v1.0.0
