@@ -90,6 +90,15 @@ class InferenceService:
         def status() -> Dict[str, Any]:
             return ctx.controller.get_status()
 
+        @api.get("/warm")
+        def warm() -> Dict[str, Any]:
+            # Prewarm-trigger: att nå denna route har redan kört @modal.enter
+            # (setup + GPU-warm/model-preload), så ett 200 här betyder att containern
+            # är varm. Gör ingen inferens. Façaden pingar denna fire-and-forget vid
+            # request-entry så GPU-kallstarten överlappar CPU-arbetet i stället för
+            # att betalas serialiserat på /spec eller /run. Se infra.lux/docs/experiments.md.
+            return {"warm": True}
+
         @api.post("/run")
         async def run(
             file: UploadFile = File(...),
