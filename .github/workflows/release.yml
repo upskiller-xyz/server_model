@@ -1,0 +1,45 @@
+name: Release image
+
+# Build + push the service image to the Scaleway registry via the shared
+# composite action in infra.lux (which runs infra.lux/scripts/release.sh).
+# Tag scheme: v1.2.0 -> 1.2.0 + latest | master -> git-describe + edge |
+#             dispatch -> branch-sha (+ optional postfix). See infra.lux/README.md.
+#
+# NOTE: this is the CPU image (the repo Dockerfile) — for provenance, local runs,
+# and CPU testing. It is NOT what the Modal GPU deploy uses: that builds from
+# source on Modal (CUDA + baked models, see infra.lux/modal/model_gpu/).
+
+on:
+  push:
+    tags: ["v*"]
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      postfix:
+        description: "Extra immutable tag for this manual build (e.g. rc.1)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize PUSH builds that move a shared tag (latest on tag pushes, edge on
+  # master) so two releases can't race and leave latest/edge on the wrong image.
+  # workflow_dispatch (even on master) and feature builds only produce immutable
+  # branch-sha tags → key per-ref and cancel superseded runs.
+  group: release-${{ (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) && 'shared' || github.ref }}
+  cancel-in-progress: ${{ !(github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master')) }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # release.sh needs full history + tags for `git describe`
+      - uses: upskiller-xyz/infra.lux/.github/actions/release@3f016f104915545e7ae6b0ac9c59711456a800c6 # v1.0.0
+        with:
+          image: server-model
+          postfix: ${{ github.event.inputs.postfix || '' }}
+          scw-secret-key: ${{ secrets.SCW_SECRET_KEY }}

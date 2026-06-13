@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Keep the pinned release action (and other actions) up to date. Dependabot
+  # bumps the commit SHA and the trailing "# vX.Y.Z" comment together, so the
+  # workflow stays on an immutable ref while updates arrive via reviewable PRs.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
