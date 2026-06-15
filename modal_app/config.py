@@ -12,9 +12,9 @@ APP_NAME = "upskiller-model"
 GPU = "L4"
 
 # Seconds a warm container is kept alive after its last request (cold-start vs cost).
-# 300s for production: stays warm for 5 min between requests so only the first
-# after a quiet period cold-starts. Idle tail ~$0.067 per scale-down.
-SCALEDOWN_WINDOW = 300
+# 60s: scale to zero quickly to minimise idle cost; trades more frequent cold starts
+# (mitigated by the /warm prewarm path) for a shorter idle tail.
+SCALEDOWN_WINDOW = 60
 
 # Containers kept permanently warm. 0 = scale to zero (cheapest, cold starts).
 MIN_CONTAINERS = 0
