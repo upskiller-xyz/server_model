@@ -18,7 +18,8 @@ runtime_secrets = (
 image = (
     # CUDA base image: onnxruntime-gpu needs the CUDA 12 / cuDNN 9 shared libs
     # (libcublasLt.so.12 etc.) which debian_slim lacks. Tag matches ORT's CUDA
-    # 12.x + cuDNN 9.x requirement for onnxruntime-gpu >= 1.20.
+    # 12.x + cuDNN 9.x requirement for onnxruntime-gpu 1.20–1.26 (the cap pinned in
+    # requirements.modal.txt; 1.27+ moved to CUDA 13 and needs a CUDA 13 base).
     modal.Image.from_registry(
         "nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04",
         add_python="3.11",

@@ -54,6 +54,48 @@ modal serve -m modal_app.app     # dev: temporary URL, hot reload
 modal deploy -m modal_app.app    # production
 ```
 
+## Deploying under a different Modal account
+
+Modal stores each account as a **profile** in `~/.modal.toml`; one profile = one
+workspace. Proxy-auth tokens and `modal secret`s are **workspace-scoped**, so they
+must be (re)created in the target account.
+
+1. **Authenticate the new account as its own profile** (does not overwrite the
+   existing one — log into the target workspace in the browser before approving):
+   ```
+   modal token new --profile other-account
+   modal profile list          # both accounts now listed
+   ```
+   Select the account per command with `MODAL_PROFILE=other-account`, or globally
+   with `modal profile activate other-account`.
+
+2. **(Private bucket only)** Recreate the Scaleway secret in the new account — the
+   default public HTTPS bucket needs none:
+   ```
+   MODAL_PROFILE=other-account modal secret create upskiller-scaleway \
+     SCW_ACCESS_KEY=... SCW_SECRET_KEY=...
+   ```
+
+3. **Deploy to the new account** (code unchanged; `REQUIRES_PROXY_AUTH=True`
+   already on):
+   ```
+   MODAL_PROFILE=other-account modal deploy -m modal_app.app
+   ```
+   Note the printed `https://<workspace>--upskiller-model-inferenceservice-web.modal.run`.
+   (The `infra.lux/modal/model_gpu/deploy.sh` wrapper picks up `MODAL_PROFILE` from
+   `model.env`, so setting it there deploys to the right account reproducibly.)
+
+4. **Create proxy-auth tokens in the new workspace** — Modal dashboard (logged into
+   the new account) → **Settings → Proxy Auth Tokens → New Token**. You get a
+   token-id (`wk-…`) and token-secret (`ws-…`); they are valid only for this
+   workspace and are what restrict who may call the endpoint.
+
+5. **Point consumers at the new endpoint.** For `server_lux` (CI-driven deploy),
+   set GitHub Variable `MODEL_SERVICE_URL` to the new host and GitHub Secrets
+   `MODAL_KEY` = `wk-…`, `MODAL_SECRET` = `ws-…`, then re-run the deploy workflow.
+   lux auto-detects `.modal.run` and attaches `Modal-Key` / `Modal-Secret` — no
+   code change.
+
 ## Storage model (hybrid)
 
 Baked models are downloaded into `/models` at build time for fast cold starts.

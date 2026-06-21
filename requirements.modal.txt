@@ -4,7 +4,13 @@
 # no Flask/gunicorn (Modal serves the endpoints).
 
 # ONNX Runtime — GPU build (CUDAExecutionProvider). Falls back to CPU when no GPU.
-onnxruntime-gpu>=1.20.1
+# Upper bound is load-bearing: 1.27.0 (2026-06-18) switched its bundled CUDA libs
+# to CUDA 13 (libcudart.so.13), which the CUDA 12.4 base image in image.py does
+# NOT provide — an unbounded pin breaks the build with
+# `ImportError: libcudart.so.13: cannot open shared object file`. 1.26.x is the
+# latest CUDA 12 / cuDNN 9 line. Raise the cap only together with the CUDA 13 base
+# image (and regenerate the baked .opt.onnx graphs).
+onnxruntime-gpu>=1.20.1,<1.27
 
 # Web endpoints (Modal @fastapi_endpoint)
 fastapi[standard]>=0.110.0
