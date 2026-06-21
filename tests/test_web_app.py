@@ -102,3 +102,21 @@ def test_spec_rejects_disallowed_model_with_400():
     assert resp.status_code == 400
     assert resp.json()["detail"] == "Requested model is not available"
     ctx.spec_service.get_spec.assert_not_called()
+
+
+def test_empty_allowlist_rejects_every_model():
+    # Arrange: an explicit empty allowlist must mean "allow none", not fall back
+    # to the configured default models.
+    ctx = MagicMock()
+    client = TestClient(build_api(ctx, allowed_models=()))
+
+    # Act
+    resp = client.post(
+        "/run",
+        files={"file": ("x.png", b"img", "image/png")},
+        data={"model": "df_default"},
+    )
+
+    # Assert
+    assert resp.status_code == 400
+    ctx.controller.handle_simulation_request.assert_not_called()

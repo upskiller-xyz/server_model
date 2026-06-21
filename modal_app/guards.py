@@ -9,7 +9,7 @@ Modal proxy-auth is the access gate; these guards limit the damage an authorized
   serve, so an arbitrary name cannot trigger registry fetches outside the
   deployment's intended set (400).
 """
-from typing import Iterable
+from typing import Iterable, Optional
 
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -35,14 +35,28 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        content_length = request.headers.get("content-length")
-        if content_length is not None and content_length.isdigit():
-            if int(content_length) > self._max_bytes:
-                return JSONResponse(
-                    status_code=HTTPStatus.PAYLOAD_TOO_LARGE.value,
-                    content={"detail": ClientErrorMessage.PAYLOAD_TOO_LARGE.value},
-                )
+        declared = self._declared_length(request.headers.get("content-length"))
+        if declared is not None and declared > self._max_bytes:
+            return JSONResponse(
+                status_code=HTTPStatus.PAYLOAD_TOO_LARGE.value,
+                content={"detail": ClientErrorMessage.PAYLOAD_TOO_LARGE.value},
+            )
         return await call_next(request)
+
+    @staticmethod
+    def _declared_length(content_length: Optional[str]) -> Optional[int]:
+        """Parse the Content-Length header, tolerating surrounding whitespace.
+
+        Returns the integer length, or None when the header is absent or not a
+        valid integer (don't reject on an unparsable value — let the route /
+        platform limits handle that edge).
+        """
+        if content_length is None:
+            return None
+        try:
+            return int(content_length.strip())
+        except ValueError:
+            return None
 
 
 class ModelAllowlist:

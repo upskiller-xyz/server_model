@@ -103,7 +103,10 @@ def build_api(
     """
     api = FastAPI(title="Upskiller Model Server")
     api.add_middleware(BodySizeLimitMiddleware, max_bytes=max_request_bytes)
-    model_allowlist = ModelAllowlist(allowed_models or config.ALLOWED_MODELS)
+    # `is None` (not truthiness) so an explicit empty allowlist () means "allow
+    # none" rather than silently falling back to the configured default.
+    resolved_models = allowed_models if allowed_models is not None else config.ALLOWED_MODELS
+    model_allowlist = ModelAllowlist(resolved_models)
 
     @api.get("/status")
     def status() -> Dict[str, Any]:
