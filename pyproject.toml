@@ -46,6 +46,12 @@ priority = "explicit"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.pytest.ini_options]
+# Put the repo root on sys.path so tests can `import src...` / `import modal_app...`
+# regardless of the working directory pytest is invoked from.
+pythonpath = ["."]
+testpaths = ["tests"]
+
 [tool.mypy]
 disable_error_code = ["import-untyped", "no-any-return"]
 explicit_package_bases = true

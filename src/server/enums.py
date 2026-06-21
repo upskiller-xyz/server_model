@@ -35,7 +35,33 @@ class ContentType(Enum):
 class HTTPStatus(Enum):
     OK = 200
     BAD_REQUEST = 400
+    PAYLOAD_TOO_LARGE = 413
     INTERNAL_SERVER_ERROR = 500
+
+
+class ClientErrorMessage(Enum):
+    """Generic, non-leaking messages returned to API clients.
+
+    Internal exception text is logged server-side but never returned, so stack
+    traces / internal paths / model registry details don't leak to callers.
+    """
+    SIMULATION_FAILED = "Simulation failed"
+    PAYLOAD_TOO_LARGE = "Request body too large"
+    MODEL_NOT_ALLOWED = "Requested model is not available"
+
+
+class ResponseStatus(Enum):
+    """Status field values for a simulation response."""
+    SUCCESS = "success"
+    ERROR = "error"
+
+
+class ResponseKey(Enum):
+    """Keys of the /run (simulation) response payload — no magic strings."""
+    SIMULATION = "simulation"
+    SHAPE = "shape"
+    STATUS = "status"
+    ERROR = "error"
 
 
 class SpecKey(Enum):

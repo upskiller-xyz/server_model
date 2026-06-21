@@ -26,10 +26,17 @@ class TestModelServerController:
         assert result == {"status": "success"}
 
     def test_handle_simulation_request_wraps_exceptions(self):
+        # Arrange
         self.simulation_service.simulate.side_effect = RuntimeError("boom")
+
+        # Act
         result = self.controller.handle_simulation_request(b"img", "model", None)
+
+        # Assert: internal exception text is logged but never returned to the client.
         assert result["status"] == "error"
-        assert "boom" in result["error"]
+        assert result["error"] == "Simulation failed"
+        assert "boom" not in result["error"]
+        assert "boom" in self.logger.error.call_args[0][0]
 
     def test_initialize_sets_running_status(self):
         self.controller.initialize()

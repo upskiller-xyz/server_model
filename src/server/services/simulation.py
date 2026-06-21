@@ -7,6 +7,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Dict, Any, Optional
 from ..interfaces import ISimulationService, IDownloadStrategy, IImageProcessor, ILogger
+from ..enums import ClientErrorMessage
+from ..schemas import SimulationResponse
 from .onnx_model_loader import ONNXInferenceWrapper
 
 
@@ -166,15 +168,13 @@ class ModelSimulationService(ISimulationService):
                 f"elements={output_np.size} shape={output_np.shape}"
             )
 
-            return {
-                "simulation": simulation,
-                "shape": list(output_np.shape),
-                "status": "success",
-            }
+            return SimulationResponse.success(
+                simulation=simulation, shape=list(output_np.shape)
+            ).to_dict()
 
         except Exception as e:
             self._logger.error(f"Simulation failed: {e}")
-            return {"simulation": None, "shape": None, "status": "error", "error": str(e)}
+            return SimulationResponse.failure(ClientErrorMessage.SIMULATION_FAILED).to_dict()
 
 
 class SimulationServiceFactory:

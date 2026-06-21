@@ -21,9 +21,10 @@ from fastapi.responses import JSONResponse
 
 from src.server.bootstrap import ServerBootstrap
 from src.server.cond_vec import CondVecParser
-from src.server.enums import ContentType, HTTPStatus, SpecKey
+from src.server.enums import ContentType, HTTPStatus, SpecKey, ResponseKey, ResponseStatus
 
 from . import config
+from .guards import BodySizeLimitMiddleware, ModelAllowlist
 from .image import image, runtime_secrets
 
 app = modal.App(config.APP_NAME)
@@ -44,6 +45,7 @@ _cls_kwargs = dict(
     secrets=runtime_secrets,
     scaledown_window=config.SCALEDOWN_WINDOW,
     min_containers=config.MIN_CONTAINERS,
+    max_containers=config.MAX_CONTAINERS,
     enable_memory_snapshot=config.ENABLE_MEMORY_SNAPSHOT,
 )
 if config.ENABLE_GPU_SNAPSHOT:
@@ -87,14 +89,21 @@ class InferenceService:
         return build_api(self._ctx)
 
 
-def build_api(ctx: Any) -> FastAPI:
+def build_api(
+    ctx: Any,
+    max_request_bytes: int = config.MAX_REQUEST_BYTES,
+    allowed_models: Optional[tuple[str, ...]] = None,
+) -> FastAPI:
     """Build the model server's FastAPI app from a runtime context.
 
     Extracted from the Modal ``web()`` method so the routes are unit-testable with a
     plain FastAPI TestClient (pass a stub ctx exposing ``.controller`` /
-    ``.spec_service``) — no Modal runtime needed.
+    ``.spec_service``) — no Modal runtime needed. The guard params are overridable
+    so tests can exercise the size-limit / allowlist with small fixtures.
     """
     api = FastAPI(title="Upskiller Model Server")
+    api.add_middleware(BodySizeLimitMiddleware, max_bytes=max_request_bytes)
+    model_allowlist = ModelAllowlist(allowed_models or config.ALLOWED_MODELS)
 
     @api.get("/status")
     def status() -> Dict[str, Any]:
@@ -116,18 +125,20 @@ def build_api(ctx: Any) -> FastAPI:
     ) -> Dict[str, Any]:
         if not ContentType.is_image(file.content_type or ""):
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail="File must be an image")
+        model_allowlist.validate(model)
         try:
             cv = CondVecParser.parse(cond_vec)
         except ValueError as e:
             raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.value, detail=str(e))
         image_bytes = await file.read()
         result = ctx.controller.handle_simulation_request(image_bytes, model, cv)
-        if result.get("status") == "error":
+        if result.get(ResponseKey.STATUS.value) == ResponseStatus.ERROR.value:
             return JSONResponse(result, status_code=HTTPStatus.INTERNAL_SERVER_ERROR.value)
         return result
 
     @api.get("/spec")
     def spec(model: str) -> Dict[str, Any]:
+        model_allowlist.validate(model)
         try:
             spec_data = ctx.spec_service.get_spec(model)
         except (ClientError, FileNotFoundError, requests.exceptions.HTTPError) as e:
