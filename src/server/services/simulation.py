@@ -151,19 +151,18 @@ class ModelSimulationService(ISimulationService):
             t1 = perf_counter()
             output = model(image_np, cv)                          # (1, 1, H, W)
             t2 = perf_counter()
-            output_np = output.squeeze()                          # (H, W)
-            output_np = np.clip(output_np, 0.0, 10.0)            # normalize to [0, 10] DF% range
-
-            simulation = output_np.tolist()
+            output_np = np.clip(output.squeeze(), 0.0, 10.0)      # (H, W), DF% range [0, 10]
             t3 = perf_counter()
+            simulation = output_np.tolist()
+            t4 = perf_counter()
 
-            # Split the warm-path cost: preprocess / GPU inference / serialize (tolist).
-            # serialize+transfer of a large (H,W) float array as JSON is the suspected
-            # bottleneck — confirm here before switching to a binary response.
+            # Distinct buckets so the log isn't misleading: preprocess / GPU inference /
+            # postprocess (squeeze+clip) / serialize (tolist only).
             self._logger.info(
                 f"[timing] preprocess={(t1 - t0) * 1000:.0f}ms "
                 f"inference={(t2 - t1) * 1000:.0f}ms "
-                f"serialize={(t3 - t2) * 1000:.0f}ms "
+                f"postprocess={(t3 - t2) * 1000:.0f}ms "
+                f"serialize={(t4 - t3) * 1000:.0f}ms "
                 f"elements={output_np.size} shape={output_np.shape}"
             )
 

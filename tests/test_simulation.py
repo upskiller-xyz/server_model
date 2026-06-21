@@ -87,3 +87,34 @@ class TestPreload:
 
         service._load_model.assert_called_once_with("model1")
         assert service._cache["model1"] is sentinel
+
+    def _service(self, tmp_path):
+        return ModelSimulationService(
+            checkpoints_dir=str(tmp_path),
+            download_strategy=MagicMock(),
+            image_processor=MagicMock(),
+            logger=MagicMock(),
+            model_url_template="https://host/{name}.onnx",
+        )
+
+    def test_preload_warms_up_loaded_model(self, tmp_path):
+        """preload() triggers a warmup inference on the loaded model."""
+        service = self._service(tmp_path)
+        wrapper = MagicMock()
+        service._load_model = MagicMock(return_value=wrapper)
+
+        service.preload("model1")
+
+        wrapper.warmup.assert_called_once()
+
+    def test_preload_swallows_warmup_failure(self, tmp_path):
+        """A warmup failure is best-effort: it must not break preload, and the model
+        is still cached."""
+        service = self._service(tmp_path)
+        wrapper = MagicMock()
+        wrapper.warmup.side_effect = RuntimeError("kernel autotune blew up")
+        service._load_model = MagicMock(return_value=wrapper)
+
+        service.preload("model1")  # must not raise
+
+        assert service._cache["model1"] is wrapper
