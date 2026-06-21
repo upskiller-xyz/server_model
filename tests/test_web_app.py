@@ -27,3 +27,96 @@ def test_status_delegates_to_controller():
     assert resp.status_code == 200
     assert resp.json() == {"name": "x", "status": "running"}
     ctx.controller.get_status.assert_called_once()
+
+
+# --- Guards: body size limit -------------------------------------------------
+
+def test_run_rejects_oversized_body_with_413():
+    # Arrange: a tiny limit so any real multipart body exceeds it.
+    ctx = MagicMock()
+    client = TestClient(build_api(ctx, max_request_bytes=5))
+
+    # Act
+    resp = client.post(
+        "/run",
+        files={"file": ("x.png", b"way more than five bytes", "image/png")},
+        data={"model": "df_default"},
+    )
+
+    # Assert: rejected before the route runs, so no GPU work / OOM risk.
+    assert resp.status_code == 413
+    assert resp.json()["detail"] == "Request body too large"
+    ctx.controller.handle_simulation_request.assert_not_called()
+
+
+# --- Guards: model allowlist -------------------------------------------------
+
+def test_run_rejects_disallowed_model_with_400():
+    # Arrange
+    ctx = MagicMock()
+    client = TestClient(build_api(ctx, allowed_models=("df_default",)))
+
+    # Act
+    resp = client.post(
+        "/run",
+        files={"file": ("x.png", b"img", "image/png")},
+        data={"model": "evil_model"},
+    )
+
+    # Assert: unknown model never reaches the download-on-demand path.
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Requested model is not available"
+    ctx.controller.handle_simulation_request.assert_not_called()
+
+
+def test_run_allows_listed_model():
+    # Arrange
+    ctx = MagicMock()
+    ctx.controller.handle_simulation_request.return_value = {
+        "simulation": [[1.0]], "shape": [1, 1], "status": "success", "error": None,
+    }
+    client = TestClient(build_api(ctx, allowed_models=("df_default",)))
+
+    # Act
+    resp = client.post(
+        "/run",
+        files={"file": ("x.png", b"img", "image/png")},
+        data={"model": "df_default"},
+    )
+
+    # Assert
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
+    ctx.controller.handle_simulation_request.assert_called_once()
+
+
+def test_spec_rejects_disallowed_model_with_400():
+    # Arrange
+    ctx = MagicMock()
+    client = TestClient(build_api(ctx, allowed_models=("df_default",)))
+
+    # Act
+    resp = client.get("/spec", params={"model": "evil_model"})
+
+    # Assert
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Requested model is not available"
+    ctx.spec_service.get_spec.assert_not_called()
+
+
+def test_empty_allowlist_rejects_every_model():
+    # Arrange: an explicit empty allowlist must mean "allow none", not fall back
+    # to the configured default models.
+    ctx = MagicMock()
+    client = TestClient(build_api(ctx, allowed_models=()))
+
+    # Act
+    resp = client.post(
+        "/run",
+        files={"file": ("x.png", b"img", "image/png")},
+        data={"model": "df_default"},
+    )
+
+    # Assert
+    assert resp.status_code == 400
+    ctx.controller.handle_simulation_request.assert_not_called()

@@ -1,7 +1,8 @@
 from typing import Dict, Any, Optional
 import numpy as np
 from .interfaces import IServerController, ISimulationService, ILogger
-from .enums import ServerStatus
+from .enums import ServerStatus, ClientErrorMessage
+from .schemas import SimulationResponse
 
 
 class ModelServerController(IServerController):
@@ -40,7 +41,7 @@ class ModelServerController(IServerController):
             return self._simulation_service.simulate(image_bytes, model_name, cond_vec)
         except Exception as e:
             self._logger.error(f"Simulation request failed: {e}")
-            return {"simulation": None, "shape": None, "status": "error", "error": str(e)}
+            return SimulationResponse.failure(ClientErrorMessage.SIMULATION_FAILED).to_dict()
 
     @property
     def status(self) -> ServerStatus:
