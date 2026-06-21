@@ -4,6 +4,7 @@ import numpy as np
 import onnxruntime as ort
 from collections import OrderedDict
 from pathlib import Path
+from time import perf_counter
 from typing import Dict, Any, Optional
 from ..interfaces import ISimulationService, IDownloadStrategy, IImageProcessor, ILogger
 from .onnx_model_loader import ONNXInferenceWrapper
@@ -108,8 +109,21 @@ class ModelSimulationService(ISimulationService):
             return wrapper
 
     def preload(self, model_name: str) -> None:
-        """Eagerly load and cache a model's session (warms first-request latency)."""
-        self._get_model(model_name)
+        """Eagerly load AND warm a model: loads the session, then runs one dummy
+        inference so cuDNN kernels are compiled now (at container init / prewarm)
+        instead of on the first real request (~790ms first → ~17ms steady-state).
+
+        Best-effort: a warmup failure must not break init. Only runs where preload
+        is called (``_warm_gpu``, i.e. post-restore on GPU), never during the CPU
+        snapshot.
+        """
+        model = self._get_model(model_name)
+        try:
+            t = perf_counter()
+            model.warmup()
+            self._logger.info(f"[timing] warmup '{model_name}': {(perf_counter() - t) * 1000:.0f}ms")
+        except Exception as e:
+            self._logger.warning(f"Model '{model_name}' warmup skipped (ignored): {e}")
 
     def simulate(
         self,
@@ -120,6 +134,7 @@ class ModelSimulationService(ISimulationService):
         try:
             model = self._get_model(model_name)
 
+            t0 = perf_counter()
             image_np = self._image_processor.preprocess(image_bytes)  # (1, C, H, W) in [0, 1]
 
             # Trim channels to match model expectation (e.g. 4-channel image → 3-channel model)
@@ -133,14 +148,26 @@ class ModelSimulationService(ISimulationService):
             if model.has_cond_vec and cond_vec is None:
                 self._logger.warning(f"Model '{model_name}' expects cond_vec but none was provided")
 
+            t1 = perf_counter()
             output = model(image_np, cv)                          # (1, 1, H, W)
-            output_np = output.squeeze()                          # (H, W)
-            output_np = np.clip(output_np, 0.0, 10.0)            # normalize to [0, 10] DF% range
+            t2 = perf_counter()
+            output_np = np.clip(output.squeeze(), 0.0, 10.0)      # (H, W), DF% range [0, 10]
+            t3 = perf_counter()
+            simulation = output_np.tolist()
+            t4 = perf_counter()
 
-            self._logger.info(f"Output shape: {output_np.shape}, range: [{output_np.min():.3f}, {output_np.max():.3f}]")
+            # Distinct buckets so the log isn't misleading: preprocess / GPU inference /
+            # postprocess (squeeze+clip) / serialize (tolist only).
+            self._logger.info(
+                f"[timing] preprocess={(t1 - t0) * 1000:.0f}ms "
+                f"inference={(t2 - t1) * 1000:.0f}ms "
+                f"postprocess={(t3 - t2) * 1000:.0f}ms "
+                f"serialize={(t4 - t3) * 1000:.0f}ms "
+                f"elements={output_np.size} shape={output_np.shape}"
+            )
 
             return {
-                "simulation": output_np.tolist(),
+                "simulation": simulation,
                 "shape": list(output_np.shape),
                 "status": "success",
             }

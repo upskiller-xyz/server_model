@@ -37,3 +37,26 @@ class ONNXInferenceWrapper:
         if self._has_cond_vec and cond_vec is not None:
             feed['cond_vec'] = cond_vec
         return self._session.run([self._output_name], feed)[0]
+
+    def warmup(self, height: int = 384, width: int = 384) -> None:
+        """Run one dummy inference to trigger cuDNN autotuning / kernel compilation.
+
+        The first real inference on a fresh CUDA session pays ~hundreds of ms of
+        kernel selection (measured: ~790ms first vs ~17ms steady-state). Doing it
+        here (at container init / prewarm) means the first real request is fast.
+        Shape matches real input ((1, C, H, W)); dynamic dims fall back to H×W.
+        """
+        img_input = next(i for i in self._session.get_inputs() if i.name == self._input_name)
+        dims = img_input.shape  # (batch, C, H, W); dims may be strings for dynamic axes
+        c = dims[1] if isinstance(dims[1], int) and dims[1] > 0 else self._in_channels
+        h = dims[2] if isinstance(dims[2], int) and dims[2] > 0 else height
+        w = dims[3] if isinstance(dims[3], int) and dims[3] > 0 else width
+
+        dummy = np.zeros((1, c, h, w), dtype=np.float32)
+        cond = None
+        if self._has_cond_vec:
+            cv_input = next(i for i in self._session.get_inputs() if i.name == 'cond_vec')
+            cshape = [d if isinstance(d, int) and d > 0 else 1 for d in cv_input.shape]
+            cond = np.zeros(cshape, dtype=np.float32)
+
+        self(dummy, cond)
