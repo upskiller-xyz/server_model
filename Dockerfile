@@ -17,10 +17,18 @@ WORKDIR /app
 # Copy requirements first for better Docker cache
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
+# Upgrade build tooling (fixes pip / setuptools / wheel CVEs) and install deps.
+# The installs stay &&-gated so any failure fails the build; the final cleanup
+# purges the old bundled/cached wheels the base image ships (ensurepip stashes
+# vulnerable .whl files that scanners still flag even after an upgrade) in a
+# best-effort block so every step runs regardless of the others' exit codes.
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    { \
+        find /usr/local/lib -type d -name "_bundled" -path "*ensurepip*" -exec rm -rf {} + 2>/dev/null; \
+        rm -rf /root/.cache/pip; \
+    }
 
 # Copy source code
 COPY src/ ./src/
