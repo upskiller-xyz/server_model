@@ -11,7 +11,7 @@ gunicorn>=20.1.0
 requests>=2.32.0
 
 # Image Processing
-Pillow>=11.4.0
+Pillow>=12.0.0
 opencv-python>=4.12.0.88
 
 # NumPy (required by ONNX Runtime)
