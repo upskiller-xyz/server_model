@@ -18,7 +18,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Pinned build-tooling versions keep the image reproducible; override with
-# --build-arg if a newer patched release is needed. These floors clear the
+# --build-arg if a newer patched release is needed. These pins clear the
 # pip / setuptools / wheel CVE scan findings (setuptools 83 also vendors the
 # patched jaraco.context 6.1 + wheel 0.46.3 under setuptools/_vendor/).
 ARG PIP_VERSION=26.1.2
@@ -35,6 +35,7 @@ RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "setuptools==${SE
     { \
         find /usr/local/lib -type d -name "_bundled" -path "*ensurepip*" -exec rm -rf {} + 2>/dev/null; \
         rm -rf /root/.cache/pip; \
+        true; \
     }
 
 # Copy source code
