@@ -26,14 +26,20 @@ ARG SETUPTOOLS_VERSION=83.0.0
 ARG WHEEL_VERSION=0.47.0
 # Upgrade build tooling (fixes pip / setuptools / wheel CVEs) and install deps.
 # The installs stay &&-gated so any failure fails the build; the final cleanup
-# purges the old bundled/cached wheels the base image ships (ensurepip stashes
-# vulnerable .whl files that scanners still flag even after an upgrade) in a
-# best-effort block so every step runs regardless of the others' exit codes.
+# (best-effort block, ends in `true` so it never fails the build) purges:
+#   1. the ensurepip _bundled wheels + pip cache the base image ships; and
+#   2. as a safety net, any pre-patch vendored wheel/jaraco.context .dist-info
+#      left under setuptools/_vendor/ if the base image's setuptools couldn't be
+#      cleanly uninstalled. Normally a no-op — 83.0.0 already vendors the patched
+#      wheel 0.46.3 + jaraco.context 6.1.0, which the version-scoped match spares.
 RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "setuptools==${SETUPTOOLS_VERSION}" "wheel==${WHEEL_VERSION}" && \
     pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt && \
     { \
         find /usr/local/lib -type d -name "_bundled" -path "*ensurepip*" -exec rm -rf {} + 2>/dev/null; \
+        find /usr/local/lib -type d -path "*/setuptools/_vendor/*" \
+            \( -name "wheel-0.4[0-5]*" -o -name "jaraco.context-[0-5]*" -o -name "jaraco_context-[0-5]*" \) \
+            -exec rm -rf {} + 2>/dev/null; \
         rm -rf /root/.cache/pip; \
         true; \
     }
