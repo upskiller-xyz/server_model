@@ -20,7 +20,12 @@ numpy>=1.24.0
 # PyTorch (for TorchScript model support)
 torch>=2.0.0
 
-# Utilities
+# Build tooling — setuptools >=81.0.0 is the first release whose vendored build
+# deps are patched: it bundles jaraco.context 6.1 (CVE-2026-23949) and
+# wheel 0.46.3 (CVE-2026-24049) under setuptools/_vendor/, which scanners flag on
+# older setuptools. Pin the floor so no dependency can pull an older, vulnerable
+# setuptools back in after the Dockerfile upgrade.
+setuptools>=81.0.0,<84.0.0
 
 # S3 access (Scaleway / AWS compatible)
 boto3>=1.34.0
