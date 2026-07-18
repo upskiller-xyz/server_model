@@ -26,3 +26,9 @@ steps:
 images:
 - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:edge'
 - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:$SHORT_SHA'
+
+# Required when the trigger runs as a user-specified service account: Cloud Build
+# then demands an explicit logging destination. CLOUD_LOGGING_ONLY sends logs to
+# Cloud Logging (no logs bucket needed).
+options:
+  logging: CLOUD_LOGGING_ONLY
