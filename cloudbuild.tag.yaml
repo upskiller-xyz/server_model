@@ -1,0 +1,28 @@
+# Cloud Build config for the TAG trigger (push new tag, e.g. ^v\d+\.\d+\.\d+$).
+#
+# Builds the image once and pushes two tags:
+#   latest       -> always the latest released tag (moving)
+#   $TAG_NAME    -> immutable release tag, e.g. v1.2.3
+#
+# Built-ins (do NOT define): $PROJECT_ID, $TAG_NAME
+# Trigger substitution variables you must define in the console:
+#   _GCP_REGION   e.g. europe-west1
+#   _REPO_NAME    Artifact Registry repo (user sub, must start with '_';
+#                 distinct from the built-in $REPO_NAME which we never use)
+#   _IMAGE_NAME   e.g. server-lux  (differs per microservice)
+#
+# No defaults on purpose: a missing variable fails the build loudly.
+
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    - 'build'
+    - '-t'
+    - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest'
+    - '-t'
+    - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:$TAG_NAME'
+    - '.'
+
+images:
+- '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:latest'
+- '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:$TAG_NAME'

@@ -1,0 +1,28 @@
+# Cloud Build config for the MASTER-merge trigger (push to ^master$).
+#
+# Builds the image once and pushes two moving/immutable tags:
+#   edge         -> always the latest master build (moving)
+#   $SHORT_SHA   -> immutable, pins the exact commit
+#
+# Built-ins (do NOT define): $PROJECT_ID, $SHORT_SHA
+# Trigger substitution variables you must define in the console:
+#   _GCP_REGION   e.g. europe-west1
+#   _REPO_NAME    Artifact Registry repo (user sub, must start with '_';
+#                 distinct from the built-in $REPO_NAME which we never use)
+#   _IMAGE_NAME   e.g. server-lux  (differs per microservice)
+#
+# No defaults on purpose: a missing variable fails the build loudly.
+
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    - 'build'
+    - '-t'
+    - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:edge'
+    - '-t'
+    - '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:$SHORT_SHA'
+    - '.'
+
+images:
+- '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:edge'
+- '${_GCP_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO_NAME}/${_IMAGE_NAME}:$SHORT_SHA'
