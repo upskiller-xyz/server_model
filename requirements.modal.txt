@@ -27,8 +27,9 @@ numpy>=1.24.0
 requests>=2.32.0
 boto3>=1.34.0
 
-# Build tooling — setuptools >=81.0.0 is the first release whose vendored build
+# Build tooling — setuptools 81.0.0 is the first release whose vendored build
 # deps are patched: jaraco.context 6.1 (CVE-2026-23949) and wheel 0.46.3
-# (CVE-2026-24049) under setuptools/_vendor/. Pin the floor so the Modal image
-# ships no vulnerable vendored copy.
+# (CVE-2026-24049) under setuptools/_vendor/. Constrained to a range: floor
+# 81.0.0 keeps the Modal image off vulnerable vendored copies; the <84.0.0 cap
+# guards reproducibility against a future major.
 setuptools>=81.0.0,<84.0.0
