@@ -81,3 +81,7 @@ class EnvVar(Enum):
     SCW_SECRET_KEY = "SCW_SECRET_KEY"
     SCW_REGION = "SCW_REGION"
     SCW_ENDPOINT_URL = "SCW_ENDPOINT_URL"
+    # JSON object: local model file name (e.g. "df_default_2.0.1.onnx") → sha256 hex
+    MODEL_SHA256 = "MODEL_SHA256"
+    # "true" → refuse to download a model that has no pinned digest
+    MODEL_SHA256_REQUIRED = "MODEL_SHA256_REQUIRED"
