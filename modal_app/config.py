@@ -6,6 +6,7 @@ so the app/image modules contain no magic strings.
 import os
 from typing import Optional
 
+from src.server.enums import EnvVar
 from src.server.model_allowlist import (
     ALLOWED_MODELS_ENV,
     DEFAULT_ALLOWED_MODELS,
@@ -95,6 +96,11 @@ RUNTIME_ENV = {
     # this module parses the same value the deploy resolved (env is not otherwise
     # carried into the container).
     ALLOWED_MODELS_ENV: ",".join(ALLOWED_MODELS),
+    # Checksum pins read by ServerBootstrap.from_env() inside the container:
+    # without these the Modal runtime sees an empty, non-required registry and
+    # download-on-demand stays unverified even when pins are set at deploy time.
+    EnvVar.MODEL_SHA256.value: os.getenv(EnvVar.MODEL_SHA256.value, ""),
+    EnvVar.MODEL_SHA256_REQUIRED.value: os.getenv(EnvVar.MODEL_SHA256_REQUIRED.value, "false"),
 }
 
 # URL template used to fetch the baked models at build time. Public HTTPS needs

@@ -66,8 +66,8 @@ ENV MODEL=df_default_2.0.1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Expose port
-EXPOSE 8000
+# Expose port (matches gunicorn's $PORT binding below)
+EXPOSE 8083
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \

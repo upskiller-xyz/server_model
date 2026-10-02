@@ -40,11 +40,11 @@ class AtomicDownloadStrategy(IDownloadStrategy):
         self._verifier = verifier
 
     def download(self, url: str, local_path: str) -> str:
-        if os.path.exists(local_path):
+        file_name = Path(local_path).name
+        if os.path.exists(local_path) and self._accept_cached(file_name, local_path):
             self._logger.info(f"File already exists at {local_path}")
             return local_path
 
-        file_name = Path(local_path).name
         if self._verifier is not None:
             self._verifier.precheck(file_name)
 
@@ -63,6 +63,28 @@ class AtomicDownloadStrategy(IDownloadStrategy):
 
         self._logger.info(f"Download completed: {local_path}")
         return local_path
+
+    def _accept_cached(self, file_name: str, local_path: str) -> bool:
+        """Whether the file already at ``local_path`` may be used as it is.
+
+        The cached artifact goes through the same gate as a fresh transfer:
+        ``precheck`` first, so a required registry refuses an unpinned file
+        instead of trusting whatever happens to be on disk, then the digest.
+        A pinned file that no longer matches is dropped and refetched, so a
+        stale or tampered artifact is never loaded just because it exists.
+        """
+        if self._verifier is None:
+            return True
+        self._verifier.precheck(file_name)
+        try:
+            self._verifier.verify(file_name, local_path)
+            return True
+        except ArtifactIntegrityError:
+            self._logger.warning(
+                f"Cached '{local_path}' failed SHA-256 verification — refetching"
+            )
+            Path(local_path).unlink(missing_ok=True)
+            return False
 
     @abstractmethod
     def _fetch(self, url: str, tmp_path: str) -> None:
@@ -144,8 +166,7 @@ class S3DownloadStrategy(AtomicDownloadStrategy):
         Returns:
             local_path after successful download
         """
-        if not os.path.exists(local_path):
-            self._parse(url)  # reject malformed URLs before touching the disk
+        self._parse(url)  # reject malformed URLs before touching the disk
         return super().download(url, local_path)
 
     def _fetch(self, url: str, tmp_path: str) -> None:

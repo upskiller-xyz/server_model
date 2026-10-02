@@ -88,7 +88,7 @@ curl -X POST http://localhost:8000/run \
 |----------|---------|-------------|
 | `MODEL` | `df_default_2.0.1` | Model name to load |
 | `MODEL_FORMAT` | `onnx` | Model format: `onnx`, `torchscript`|
-| `PORT` | `8000` | Server port |
+| `PORT` | `8083` in the image | Port gunicorn binds (and the one the image EXPOSEs); docker-compose sets `8000` |
 
 ### Model Configuration
 
@@ -121,10 +121,19 @@ docker build -t upskiller-model-server .
 ### Run Container
 
 ```bash
-docker run -p 8000:8000 \
+docker run -p 8000:8083 \
   -e MODEL=df_default_2.0.1 \
-  -v $(pwd)/checkpoints:/app/checkpoints \
+  -v model-cache:/app/checkpoints \
   upskiller-model-server
+```
+
+The container runs as unprivileged UID 10001 and only writes the model cache.
+Use a named volume (as above) — Docker initializes its ownership from the
+image, so the non-root user can write it. If you bind-mount a host directory
+instead, it must be writable by UID 10001:
+
+```bash
+mkdir -p checkpoints && sudo chown 10001 checkpoints
 ```
 
 ### Docker Compose

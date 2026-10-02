@@ -89,6 +89,44 @@ class TestChecksumVerification:
             strategy.download("u", str(tmp_path / "m.onnx"))
         assert strategy.calls == 0
 
+    def test_cached_file_matching_pin_is_reused(self, tmp_path):
+        target = tmp_path / "m.onnx"
+        target.write_bytes(PAYLOAD)
+        strategy = _FakeStrategy(MagicMock(), self._verifier({"m.onnx": PAYLOAD_SHA256}))
+        strategy.download("u", str(target))
+        assert strategy.calls == 0  # cache hit, no refetch
+
+    def test_cached_file_failing_pin_is_refetched(self, tmp_path):
+        target = tmp_path / "m.onnx"
+        target.write_bytes(b"tampered")
+        strategy = _FakeStrategy(MagicMock(), self._verifier({"m.onnx": PAYLOAD_SHA256}))
+        strategy.download("u", str(target))
+        assert strategy.calls == 1  # stale cache dropped and refetched
+        assert target.read_bytes() == PAYLOAD
+
+    def test_cached_file_failing_pin_is_refetched_when_required(self, tmp_path):
+        target = tmp_path / "m.onnx"
+        target.write_bytes(b"tampered")
+        strategy = _FakeStrategy(MagicMock(), self._verifier({"m.onnx": PAYLOAD_SHA256}, required=True))
+        strategy.download("u", str(target))
+        assert strategy.calls == 1
+        assert target.read_bytes() == PAYLOAD
+
+    def test_cached_unpinned_file_is_accepted_when_not_required(self, tmp_path):
+        target = tmp_path / "m.onnx"
+        target.write_bytes(b"cached")
+        strategy = _FakeStrategy(MagicMock(), self._verifier({}))
+        strategy.download("u", str(target))
+        assert strategy.calls == 0
+
+    def test_cached_unpinned_file_is_refused_when_required(self, tmp_path):
+        target = tmp_path / "m.onnx"
+        target.write_bytes(b"cached")
+        strategy = _FakeStrategy(MagicMock(), self._verifier({}, required=True))
+        with pytest.raises(ArtifactIntegrityError):
+            strategy.download("u", str(target))
+        assert strategy.calls == 0  # a required pin is never satisfied by the cache
+
 
 class TestChecksumRegistry:
 
