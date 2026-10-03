@@ -9,7 +9,7 @@ Modal proxy-auth is the access gate; these guards limit the damage an authorized
   serve, so an arbitrary name cannot trigger registry fetches outside the
   deployment's intended set (400).
 """
-from typing import Iterable, Optional
+from typing import Optional
 
 from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -17,6 +17,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from src.server.enums import HTTPStatus, ClientErrorMessage
+from src.server.model_allowlist import ModelNameAllowlist
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
@@ -59,19 +60,13 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
             return None
 
 
-class ModelAllowlist:
-    """Allowlist of model names the deployment will serve.
+class ModelAllowlist(ModelNameAllowlist):
+    """FastAPI adapter of :class:`ModelNameAllowlist`.
 
     Centralizes the check so both ``/run`` and ``/spec`` enforce the same set.
     Rejects unknown names with 400 rather than letting them reach the
     download-on-demand path with an arbitrary registry URL.
     """
-
-    def __init__(self, allowed: Iterable[str]) -> None:
-        self._allowed = frozenset(allowed)
-
-    def is_allowed(self, model_name: str) -> bool:
-        return model_name in self._allowed
 
     def validate(self, model_name: str) -> None:
         """Raise 400 ``HTTPException`` if ``model_name`` is not permitted."""

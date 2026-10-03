@@ -11,7 +11,13 @@ from typing import Optional
 from .controller import ModelServerController
 from .enums import LogLevel, EnvVar
 from .interfaces import IDownloadStrategy, ILogger, ISimulationService, ISpecService
-from .services.download import HTTPDownloadStrategy, S3DownloadStrategy
+from .services.download import (
+    ChecksumRegistry,
+    ChecksumVerifier,
+    HTTPDownloadStrategy,
+    IArtifactVerifier,
+    S3DownloadStrategy,
+)
 from .services.image_processor import ImageProcessorFactory
 from .services.logging import StructuredLogger
 from .services.simulation import SimulationServiceFactory
@@ -55,14 +61,22 @@ class ServerBootstrap:
             return default
         return value.strip()
 
+    @classmethod
+    def _build_model_verifier(cls, logger: ILogger) -> IArtifactVerifier:
+        """SHA-256 pins for downloaded models (``MODEL_SHA256`` / ``MODEL_SHA256_REQUIRED``)."""
+        required = cls._env(EnvVar.MODEL_SHA256_REQUIRED.value, "false").lower() in ("true", "1", "yes")
+        registry = ChecksumRegistry.from_json(os.getenv(EnvVar.MODEL_SHA256.value), required=required)
+        return ChecksumVerifier(registry, logger)
+
     @staticmethod
     def _build_download_strategy(
         url_template: str,
         logger: ILogger,
+        verifier: Optional[IArtifactVerifier] = None,
     ) -> IDownloadStrategy:
         """Pick S3 or HTTP download strategy based on the URL scheme."""
         if not url_template.startswith("s3://"):
-            return HTTPDownloadStrategy(logger)
+            return HTTPDownloadStrategy(logger, verifier=verifier)
 
         access_key = os.getenv(EnvVar.SCW_ACCESS_KEY.value)
         secret_key = os.getenv(EnvVar.SCW_SECRET_KEY.value)
@@ -77,6 +91,7 @@ class ServerBootstrap:
             secret_key=secret_key,
             region=os.getenv(EnvVar.SCW_REGION.value, "fr-par"),
             endpoint_url=os.getenv(EnvVar.SCW_ENDPOINT_URL.value, "https://s3.fr-par.scw.cloud"),
+            verifier=verifier,
         )
 
     @classmethod
@@ -97,7 +112,9 @@ class ServerBootstrap:
             EnvVar.MODEL_URL_TEMPLATE.value,
             f"https://{model_bucket}.s3.fr-par.scw.cloud/models/{{name}}.onnx",
         )
-        download_strategy = cls._build_download_strategy(model_url_template, logger)
+        download_strategy = cls._build_download_strategy(
+            model_url_template, logger, cls._build_model_verifier(logger)
+        )
 
         simulation_service: ISimulationService = SimulationServiceFactory.create(
             checkpoints_dir=checkpoints_dir,

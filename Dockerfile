@@ -1,5 +1,6 @@
 # ONNX Model Server - Production Dockerfile
-FROM python:3.11-slim
+# Base image pinned by digest (reproducible, tamper-evident); Dependabot bumps it.
+FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
 
 # Install system dependencies for OpenCV and PyTorch
 RUN apt-get update && apt-get install -y \
@@ -49,7 +50,11 @@ COPY src/ ./src/
 COPY main.py .
 
 # Create checkpoints directory for model cache
-RUN mkdir -p /app/checkpoints
+# Unprivileged runtime user; it may only write the model download cache.
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/checkpoints \
+    && chown app:app /app/checkpoints
 
 # Set file permissions (read-only for security)
 RUN chmod 444 main.py
@@ -61,12 +66,14 @@ ENV MODEL=df_default_2.0.1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Expose port
-EXPOSE 8000
+# Expose port (matches gunicorn's $PORT binding below)
+EXPOSE 8083
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/')" || exit 1
+    CMD python -c "import os, requests; requests.get(f\"http://localhost:{os.environ['PORT']}/\", timeout=5).raise_for_status()" || exit 1
+
+USER app
 
 # Run with gunicorn
 CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 900 --access-logfile - --error-logfile - main:app"]

@@ -7,3 +7,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # Base image digest in the Dockerfile.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"

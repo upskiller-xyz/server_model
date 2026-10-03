@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import requests
 from flask import Flask, request, jsonify
@@ -8,13 +10,24 @@ from typing import Dict, Any, Optional
 from src.server.bootstrap import ServerBootstrap
 from src.server.cond_vec import CondVecParser
 from src.server.controller import ModelServerController
-from src.server.enums import ContentType, HTTPStatus, SpecKey
+from src.server.enums import ClientErrorMessage, ContentType, HTTPStatus, SpecKey
+from src.server.model_allowlist import ModelNameAllowlist
+
+# Same bound as the Modal adapter (modal_app/config.py MAX_REQUEST_BYTES).
+DEFAULT_MAX_REQUEST_BYTES = 25 * 1024 * 1024
+MAX_REQUEST_BYTES_ENV = "MAX_CONTENT_LENGTH_BYTES"
 
 
 class ModelServerApplication:
 
     def __init__(self):
         self._app = Flask(__name__)
+        # Oversized uploads are rejected with 413 before being read into memory.
+        self._app.config["MAX_CONTENT_LENGTH"] = int(
+            os.getenv(MAX_REQUEST_BYTES_ENV, str(DEFAULT_MAX_REQUEST_BYTES))
+        )
+        # Unknown model names never reach the download-on-demand path.
+        self._model_allowlist = ModelNameAllowlist.from_environment()
         self._controller: ModelServerController = None
         self._spec_service = None
         self._setup_dependencies()
@@ -37,6 +50,8 @@ class ModelServerApplication:
         model_name = request.args.get("model")
         if not model_name:
             return jsonify({"error": "'model' query parameter is required"}), HTTPStatus.BAD_REQUEST.value
+        if not self._model_allowlist.is_allowed(model_name):
+            return jsonify({"error": ClientErrorMessage.MODEL_NOT_ALLOWED.value}), HTTPStatus.BAD_REQUEST.value
         try:
             spec = self._spec_service.get_spec(model_name)
             return jsonify({
@@ -67,6 +82,8 @@ class ModelServerApplication:
         model_name = request.form.get('model')
         if not model_name:
             raise BadRequest("'model' form field is required (e.g. 'df_default_2.0.1')")
+        if not self._model_allowlist.is_allowed(model_name):
+            raise BadRequest(ClientErrorMessage.MODEL_NOT_ALLOWED.value)
 
         # Optional cond_vec for V5 models — JSON array, e.g. "[0.5, 0.3, 0.8, 0.6, 0.9, 0.4]"
         try:

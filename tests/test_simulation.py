@@ -36,14 +36,19 @@ class TestResolveModelSource:
         self.download.download.assert_not_called()
 
     def test_falls_back_to_raw_with_full_optimization(self, tmp_path):
-        (tmp_path / "model1.onnx").write_bytes(b"raw")
+        expected = tmp_path / "model1.onnx"
+        expected.write_bytes(b"raw")
         service = self._make_service(tmp_path)
 
         path, level = service._resolve_model_source("model1")
 
-        assert path == tmp_path / "model1.onnx"
+        assert path == expected
         assert level == ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        self.download.download.assert_not_called()
+        # An existing raw model is still routed through the strategy, which owns
+        # the cache decision and verifies the file against its SHA-256 pin.
+        self.download.download.assert_called_once_with(
+            "https://host/models/model1.onnx", str(expected)
+        )
 
     def test_rejects_invalid_model_name(self, tmp_path):
         service = self._make_service(tmp_path)

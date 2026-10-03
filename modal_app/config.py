@@ -6,13 +6,19 @@ so the app/image modules contain no magic strings.
 import os
 from typing import Optional
 
+from src.server.enums import EnvVar
+from src.server.model_allowlist import (
+    ALLOWED_MODELS_ENV,
+    DEFAULT_ALLOWED_MODELS,
+    ModelNameAllowlist,
+)
+
 # Modal app name (shown in the dashboard and in deployed endpoint URLs).
 APP_NAME = "upskiller-model"
 
-# Env var (deploy-time, comma-separated) overriding ALLOWED_MODELS without a code
-# change. Resolved here and baked into the container env via RUNTIME_ENV so the
-# in-container re-import sees the same value.
-ALLOWED_MODELS_ENV = "ALLOWED_MODELS"
+# ALLOWED_MODELS_ENV (deploy-time, comma-separated) overrides ALLOWED_MODELS without
+# a code change. Resolved here and baked into the container env via RUNTIME_ENV so
+# the in-container re-import sees the same value.
 
 # GPU class for the inference container.
 GPU = "L4"
@@ -60,20 +66,9 @@ MAX_REQUEST_BYTES = 25 * 1024 * 1024
 # Override per deploy by setting the ALLOWED_MODELS env var (comma-separated);
 # otherwise the default below applies. Download-on-demand still works for permitted
 # names — the allowlist only gates which names are accepted.
-_DEFAULT_ALLOWED_MODELS: tuple[str, ...] = (
-    "df_default",
-    "df_default_2.0.1",
-    "df_default_2.0.2",
-)
-
-
-def _parse_allowed_models(raw: Optional[str]) -> tuple[str, ...]:
-    """Parse the comma-separated ALLOWED_MODELS env var, falling back to default."""
-    if not raw:
-        return _DEFAULT_ALLOWED_MODELS
-    names = tuple(name.strip() for name in raw.split(",") if name.strip())
-    return names or _DEFAULT_ALLOWED_MODELS
-
+# Defaults live in src.server.model_allowlist, shared with the Flask app.
+_DEFAULT_ALLOWED_MODELS = DEFAULT_ALLOWED_MODELS
+_parse_allowed_models = ModelNameAllowlist.parse
 
 ALLOWED_MODELS: tuple[str, ...] = _parse_allowed_models(os.getenv(ALLOWED_MODELS_ENV))
 
@@ -101,6 +96,11 @@ RUNTIME_ENV = {
     # this module parses the same value the deploy resolved (env is not otherwise
     # carried into the container).
     ALLOWED_MODELS_ENV: ",".join(ALLOWED_MODELS),
+    # Checksum pins read by ServerBootstrap.from_env() inside the container:
+    # without these the Modal runtime sees an empty, non-required registry and
+    # download-on-demand stays unverified even when pins are set at deploy time.
+    EnvVar.MODEL_SHA256.value: os.getenv(EnvVar.MODEL_SHA256.value, ""),
+    EnvVar.MODEL_SHA256_REQUIRED.value: os.getenv(EnvVar.MODEL_SHA256_REQUIRED.value, "false"),
 }
 
 # URL template used to fetch the baked models at build time. Public HTTPS needs

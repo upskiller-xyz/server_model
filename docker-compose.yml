@@ -13,8 +13,10 @@ services:
       - MODEL=${MODEL:-df_default_2.0.1}
       - PORT=8000
     volumes:
-      # Cache downloaded models between restarts
-      - ./checkpoints:/app/checkpoints
+      # Named volume (not a bind mount): Docker initializes its ownership from
+      # the image layer, so UID 10001 can write the model cache. A bind-mounted
+      # host directory is commonly root-owned and blocks the non-root user.
+      - model-cache:/app/checkpoints
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
@@ -44,7 +46,7 @@ services:
       - MODEL=${MODEL:-df_default_2.0.1}
       - PORT=8000
     volumes:
-      - ./checkpoints:/app/checkpoints
+      - model-cache:/app/checkpoints
     restart: unless-stopped
     deploy:
       resources:
@@ -55,3 +57,6 @@ services:
               capabilities: [gpu]
     profiles:
       - gpu
+
+volumes:
+  model-cache:

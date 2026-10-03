@@ -77,10 +77,14 @@ class ModelSimulationService(ISimulationService):
             return optimized_path, ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
         local_path = self._checkpoints_dir / f"{model_name}.onnx"
-        if not local_path.exists():
-            url = self._model_url_template.format(name=model_name)
-            self._logger.info(f"Downloading model '{model_name}' from {url}")
-            self._download_strategy.download(url, str(local_path))
+        # Routed through the download strategy even when the file is already
+        # here — this is not a transfer: the strategy returns straight away on a
+        # cache hit whose SHA-256 matches its pin (and without reading the file
+        # at all when no pins are configured). It refetches only when the digest
+        # does NOT match, so a stale or tampered .onnx is never loaded just
+        # because it happens to exist.
+        url = self._model_url_template.format(name=model_name)
+        self._download_strategy.download(url, str(local_path))
         return local_path, ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
     def _load_model(self, model_name: str) -> ONNXInferenceWrapper:
