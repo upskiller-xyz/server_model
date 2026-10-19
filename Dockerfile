@@ -1,6 +1,6 @@
 # ONNX Model Server - Production Dockerfile
 # Base image pinned by digest (reproducible, tamper-evident); Dependabot bumps it.
-FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
 
 # Install system dependencies for OpenCV and PyTorch
 RUN apt-get update && apt-get install -y \
@@ -22,7 +22,7 @@ COPY requirements.txt .
 # --build-arg if a newer patched release is needed. These pins clear the
 # pip / setuptools / wheel CVE scan findings (setuptools 83 also vendors the
 # patched jaraco.context 6.1 + wheel 0.46.3 under setuptools/_vendor/).
-ARG PIP_VERSION=26.1.2
+ARG PIP_VERSION=26.2.1
 ARG SETUPTOOLS_VERSION=83.0.0
 ARG WHEEL_VERSION=0.47.0
 # Upgrade build tooling (fixes pip / setuptools / wheel CVEs) and install deps.
