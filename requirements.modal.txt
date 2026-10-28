@@ -29,7 +29,8 @@ boto3>=1.34.0
 
 # Build tooling — setuptools 81.0.0 is the first release whose vendored build
 # deps are patched: jaraco.context 6.1 (CVE-2026-23949) and wheel 0.46.3
-# (CVE-2026-24049) under setuptools/_vendor/. Constrained to a range: floor
-# 81.0.0 keeps the Modal image off vulnerable vendored copies; the <84.0.0 cap
-# guards reproducibility against a future major.
-setuptools>=81.0.0,<84.0.0
+# (CVE-2026-24049) under setuptools/_vendor/; 84.1.0 fixes GHSA-xmj3-9gf7-h52w
+# in setuptools itself. Constrained to a range: floor 84.1.0 keeps the Modal
+# image off vulnerable copies; the <85.0.0 cap guards reproducibility against a
+# future major.
+setuptools>=84.1.0,<85.0.0

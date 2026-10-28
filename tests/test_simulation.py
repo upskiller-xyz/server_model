@@ -2,9 +2,10 @@
 
 Relies on the fake onnxruntime registered in conftest.py.
 """
+from unittest.mock import MagicMock
+
 import onnxruntime as ort
 import pytest
-from unittest.mock import MagicMock
 
 from src.server.services.simulation import ModelSimulationService
 

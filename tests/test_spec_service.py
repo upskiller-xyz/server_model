@@ -1,13 +1,13 @@
 """Unit tests for ModelSpecService"""
 
 import json
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.server.services.spec_service import ModelSpecService, SpecServiceFactory
-from src.server.enums import SpecKey
+import pytest
 
+from src.server.enums import SpecKey
+from src.server.services.spec_service import ModelSpecService, SpecServiceFactory
 
 VALID_SPEC = {
     "architecture": {"encoding_version": "v5"},

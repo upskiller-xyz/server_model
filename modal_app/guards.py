@@ -16,7 +16,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from src.server.enums import HTTPStatus, ClientErrorMessage
+from src.server.enums import ClientErrorMessage, HTTPStatus
 from src.server.model_allowlist import ModelNameAllowlist
 
 

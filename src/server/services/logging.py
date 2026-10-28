@@ -1,8 +1,9 @@
 import logging
 import sys
 from typing import Optional
-from ..interfaces import ILogger
+
 from ..enums import LogLevel
+from ..interfaces import ILogger
 
 
 class StructuredLogger(ILogger):

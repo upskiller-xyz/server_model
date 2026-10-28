@@ -9,7 +9,7 @@ import os
 from typing import Optional
 
 from .controller import ModelServerController
-from .enums import LogLevel, EnvVar
+from .enums import EnvVar, LogLevel
 from .interfaces import IDownloadStrategy, ILogger, ISimulationService, ISpecService
 from .services.download import (
     ChecksumRegistry,

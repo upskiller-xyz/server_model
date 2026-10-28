@@ -1,7 +1,8 @@
 """ONNX inference wrapper — mirrors eval.py _run_batch"""
+from typing import Optional
+
 import numpy as np
 import onnxruntime as ort
-from typing import Optional
 
 
 class ONNXInferenceWrapper:

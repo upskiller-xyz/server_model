@@ -1,7 +1,9 @@
 """Image preprocessing for model inference — mirrors DaylightDataset.__getitem__"""
-import numpy as np
-import cv2
 from typing import Tuple
+
+import cv2
+import numpy as np
+
 from ..interfaces import IImageProcessor, ILogger
 
 

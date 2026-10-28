@@ -6,9 +6,11 @@ import tempfile
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Mapping, Optional
-import requests
+
 import boto3
-from botocore.exceptions import ClientError, BotoCoreError
+import requests
+from botocore.exceptions import BotoCoreError, ClientError
+
 from ..interfaces import IDownloadStrategy, ILogger
 
 
