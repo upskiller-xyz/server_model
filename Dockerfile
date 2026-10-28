@@ -2,7 +2,7 @@
 # Base image pinned by digest (reproducible, tamper-evident); Dependabot bumps it.
 FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
 
-# Install system dependencies for OpenCV and PyTorch
+# Install system dependencies for OpenCV
 RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
@@ -34,7 +34,6 @@ ARG WHEEL_VERSION=0.47.0
 #      cleanly uninstalled. Normally a no-op — 83.0.0 already vendors the patched
 #      wheel 0.46.3 + jaraco.context 6.1.0, which the version-scoped match spares.
 RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "setuptools==${SETUPTOOLS_VERSION}" "wheel==${WHEEL_VERSION}" && \
-    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt && \
     { \
         find /usr/local/lib -type d -name "_bundled" -path "*ensurepip*" -exec rm -rf {} + 2>/dev/null; \
