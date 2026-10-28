@@ -87,7 +87,6 @@ curl -X POST http://localhost:8000/run \
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `MODEL` | `df_default_2.0.1` | Model name to load |
-| `MODEL_FORMAT` | `onnx` | Model format: `onnx`, `torchscript`|
 | `PORT` | `8083` in the image | Port gunicorn binds (and the one the image EXPOSEs); docker-compose sets `8000` |
 
 ### Model Configuration
