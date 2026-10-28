@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from matplotlib import pyplot as plt
 import PIL
+from matplotlib import pyplot as plt
 
 
 def save_comparison(img, gt, out, path):

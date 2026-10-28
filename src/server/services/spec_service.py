@@ -3,7 +3,7 @@ import re
 import tempfile
 import threading
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from ..interfaces import IDownloadStrategy, ILogger, ISpecService
 

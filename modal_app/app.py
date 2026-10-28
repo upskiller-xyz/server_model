@@ -21,7 +21,13 @@ from fastapi.responses import JSONResponse
 
 from src.server.bootstrap import ServerBootstrap
 from src.server.cond_vec import CondVecParser
-from src.server.enums import ContentType, HTTPStatus, SpecKey, ResponseKey, ResponseStatus
+from src.server.enums import (
+    ContentType,
+    HTTPStatus,
+    ResponseKey,
+    ResponseStatus,
+    SpecKey,
+)
 
 from . import config
 from .guards import BodySizeLimitMiddleware, ModelAllowlist

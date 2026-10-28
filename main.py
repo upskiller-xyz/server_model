@@ -1,11 +1,11 @@
 import os
+from typing import Any, Dict, Optional
 
 import numpy as np
 import requests
-from flask import Flask, request, jsonify
-from werkzeug.exceptions import BadRequest
 from botocore.exceptions import ClientError
-from typing import Dict, Any, Optional
+from flask import Flask, jsonify, request
+from werkzeug.exceptions import BadRequest
 
 from src.server.bootstrap import ServerBootstrap
 from src.server.cond_vec import CondVecParser

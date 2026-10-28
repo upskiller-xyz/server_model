@@ -8,7 +8,7 @@ shapes can never drift apart.
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .enums import ResponseKey, ResponseStatus, ClientErrorMessage
+from .enums import ClientErrorMessage, ResponseKey, ResponseStatus
 
 
 @dataclass(frozen=True)

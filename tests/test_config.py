@@ -4,7 +4,7 @@ import importlib
 import pytest
 
 import modal_app.config as config
-from modal_app.config import _parse_allowed_models, _DEFAULT_ALLOWED_MODELS
+from modal_app.config import _DEFAULT_ALLOWED_MODELS, _parse_allowed_models
 
 
 @pytest.fixture

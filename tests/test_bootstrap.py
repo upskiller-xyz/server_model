@@ -2,8 +2,9 @@
 
 Relies on the fake onnxruntime registered in conftest.py.
 """
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.server.bootstrap import ServerBootstrap
 from src.server.controller import ModelServerController

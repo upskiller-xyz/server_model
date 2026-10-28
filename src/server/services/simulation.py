@@ -1,16 +1,17 @@
 import re
 import threading
-import numpy as np
-import onnxruntime as ort
 from collections import OrderedDict
 from pathlib import Path
 from time import perf_counter
-from typing import Dict, Any, Optional
-from ..interfaces import ISimulationService, IDownloadStrategy, IImageProcessor, ILogger
+from typing import Any, Dict, Optional
+
+import numpy as np
+import onnxruntime as ort
+
 from ..enums import ClientErrorMessage
+from ..interfaces import IDownloadStrategy, IImageProcessor, ILogger, ISimulationService
 from ..schemas import SimulationResponse
 from .onnx_model_loader import ONNXInferenceWrapper
-
 
 _MAX_CACHED_MODELS = 10
 
