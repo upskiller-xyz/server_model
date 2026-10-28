@@ -108,7 +108,8 @@ optimization (`ORT_ENABLE_ALL`) on a GPU and writes `{name}.opt.onnx` next to
 each model. At runtime the optimized graph is loaded with optimizations disabled,
 so session init skips the transformation passes — this only shortens init; the
 per-inference CUDA memory transfer is unchanged. The optimized graph is
-hardware-specific: regenerate it (rebuild the image) if `config.GPU` changes.
+hardware-specific: it is built on `config.BUILD_GPU`; regenerate it (rebuild the
+image) if that changes. Fallback GPUs in `config.GPU` load the same graph.
 Non-baked (download-on-demand) models have no `.opt.onnx` and are optimized at
 load time as before.
 
