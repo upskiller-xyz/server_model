@@ -20,10 +20,10 @@ COPY requirements.txt .
 
 # Pinned build-tooling versions keep the image reproducible; override with
 # --build-arg if a newer patched release is needed. These pins clear the
-# pip / setuptools / wheel CVE scan findings (setuptools 83 also vendors the
+# pip / setuptools / wheel CVE scan findings (setuptools 84 also vendors the
 # patched jaraco.context 6.1 + wheel 0.46.3 under setuptools/_vendor/).
 ARG PIP_VERSION=26.2.1
-ARG SETUPTOOLS_VERSION=83.0.0
+ARG SETUPTOOLS_VERSION=84.2.1
 ARG WHEEL_VERSION=0.47.0
 # Upgrade build tooling (fixes pip / setuptools / wheel CVEs) and install deps.
 # The installs stay &&-gated so any failure fails the build; the final cleanup
