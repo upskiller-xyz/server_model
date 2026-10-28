@@ -20,8 +20,16 @@ APP_NAME = "upskiller-model"
 # a code change. Resolved here and baked into the container env via RUNTIME_ENV so
 # the in-container re-import sees the same value.
 
-# GPU class for the inference container.
-GPU = "L4"
+# GPU classes for the inference container, in preference order. Modal falls back
+# to the next type when the first has no free capacity — with a single type,
+# requests queue until an L4 frees up (observed: ~90s waits ending in 408).
+# The model is small (384x384, ~23ms on L4), so every type listed is sufficient.
+GPU = ["L4", "A10G", "T4"]
+
+# GPU the optimized graph ({name}.opt.onnx) is pre-built on at image build time.
+# Pinned to the preferred runtime GPU so the build is deterministic; fallback
+# GPUs load the same graph.
+BUILD_GPU = "L4"
 
 # Seconds a warm container is kept alive after its last request (cold-start vs cost).
 # 60s: scale to zero quickly to minimise idle cost; trades more frequent cold starts

@@ -43,7 +43,7 @@ image = (
     .run_function(
         optimize_baked_models,
         args=(list(config.BAKED_MODELS), config.BAKED_CHECKPOINTS_DIR),
-        gpu=config.GPU,
+        gpu=config.BUILD_GPU,
     )
     # Application source, available at runtime inside the container.
     .add_local_python_source("src", "modal_app")
