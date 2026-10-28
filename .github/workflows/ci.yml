@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+  schedule:
+    # Weekly: new advisories appear without any code change.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
+        with:
+          python-version: "3.14"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          # The modal_app tests build the FastAPI app and import modal_app.config,
+          # so they need the Modal-side web deps. Not taken from
+          # requirements.modal.txt: its onnxruntime-gpu would clash with the CPU
+          # onnxruntime the Flask tests use.
+          python -m pip install "fastapi[standard]==0.162.0" "python-multipart==0.0.32" \
+            "boto3==1.43.120" "modal==1.6.3" "pytest==9.1.1"
+
+      - name: Lint (import sorting)
+        run: |
+          python -m pip install "ruff==0.16.5"
+          # Every rule configured in pyproject.toml, so the gate matches the
+          # config instead of a subset of it.
+          python -m ruff check src tests modal_app main.py
+
+      - name: Run tests
+        run: python -m pytest tests -q
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
+        with:
+          python-version: "3.14"
+
+      - name: Audit dependencies
+        run: |
+          python -m pip install "pip-audit==2.10.1"
+          pip-audit --requirement requirements.txt --strict
