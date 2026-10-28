@@ -1,5 +1,5 @@
-# ONNX Runtime (CPU support for Docker)
-onnxruntime>=1.20.1
+# ONNX Runtime (CPU support for Docker) — 1.24.1 is the first release with Python 3.14 wheels
+onnxruntime>=1.24.1
 
 # Web Framework
 flask>=3.0.0
@@ -14,11 +14,11 @@ requests>=2.32.0
 Pillow>=12.0.0
 opencv-python>=4.12.0.88
 
-# NumPy (required by ONNX Runtime)
-numpy>=1.24.0
+# NumPy (required by ONNX Runtime) — 2.x: numpy 1.x has no Python 3.14 wheels
+numpy>=2.3.3,<3.0.0
 
 # PyTorch (for TorchScript model support)
-torch>=2.0.0
+torch>=2.9.0
 
 # Build tooling — setuptools 81.0.0 is the first release whose vendored build
 # deps are patched: it bundles jaraco.context 6.1 (CVE-2026-23949) and
