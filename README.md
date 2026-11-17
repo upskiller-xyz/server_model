@@ -126,14 +126,22 @@ docker run -p 8000:8083 \
   upskiller-model-server
 ```
 
-The container runs as unprivileged UID 10001 and only writes the model cache.
+The image is built on Red Hat Project Hummingbird
+(`registry.access.redhat.com/hi/python:3.14`, hardened and distroless):
+a `-builder` stage installs the dependencies into a venv, and the runtime stage
+has no shell and no package manager. Use `docker exec <container> python -c ...`
+for debugging; `sh`/`bash` are not available.
+
+The container runs as unprivileged UID 65532 and only writes the model cache.
 Use a named volume (as above) — Docker initializes its ownership from the
 image, so the non-root user can write it. If you bind-mount a host directory
-instead, it must be writable by UID 10001:
+instead, it must be writable by UID 65532:
 
 ```bash
-mkdir -p checkpoints && sudo chown 10001 checkpoints
+mkdir -p checkpoints && sudo chown 65532 checkpoints
 ```
+
+The Modal deployment does not use this image; see `modal_app/image.py`.
 
 ### Docker Compose
 

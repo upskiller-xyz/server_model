@@ -14,7 +14,7 @@ services:
       - PORT=8000
     volumes:
       # Named volume (not a bind mount): Docker initializes its ownership from
-      # the image layer, so UID 10001 can write the model cache. A bind-mounted
+      # the image layer, so UID 65532 can write the model cache. A bind-mounted
       # host directory is commonly root-owned and blocks the non-root user.
       - model-cache:/app/checkpoints
     restart: unless-stopped
