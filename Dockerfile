@@ -1,78 +1,61 @@
-# ONNX Model Server - Production Dockerfile
-# Base image pinned by digest (reproducible, tamper-evident); Dependabot bumps it.
-FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+# ONNX Model Server - Production Dockerfile (CPU image)
+#
+# Project Hummingbird (Red Hat hardened, distroless Python). Two stages: the
+# -builder image (has pip and a shell) builds a venv, and the distroless runtime
+# image (no shell, no package manager, runs as UID 65532) only receives the venv
+# and the source. Both are pinned by index digest (multi-arch); bump tag and
+# digest together:
+#   docker buildx imagetools inspect registry.access.redhat.com/hi/python:3.14
+#   docker buildx imagetools inspect registry.access.redhat.com/hi/python:3.14-builder
+#
+# No OS packages are installed: OpenCV is the headless wheel, which needs no
+# libGL/libX*, and the wheels (onnxruntime, numpy, opencv) bundle the native
+# libraries they need. Modal does not use this file; it has its own image
+# definition in modal_app/image.py.
 
-# Install system dependencies for OpenCV
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+FROM registry.access.redhat.com/hi/python:3.14-builder@sha256:b7ae4033035309fb6e1c6e9d2efa3b7d53bee243fdafe3ca13da4c782110ce54 AS build
 
-# Set working directory
+# The builder image runs as 65532 too; installing into /opt needs root.
+USER 0
+RUN python3 -m venv /opt/venv
+# pip is removed from the venv afterwards: nothing runs it at runtime, and it
+# would only add scan findings.
+COPY requirements.txt /tmp/requirements.txt
+RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
+    && /opt/venv/bin/pip uninstall --yes pip \
+    && mkdir -p /out/checkpoints
+
+FROM registry.access.redhat.com/hi/python:3.14@sha256:1ac4921724237d985a35cc23bbcd779fd5b984089e039182bf8e22cd108490d6
+
 WORKDIR /app
+# HOME is /tmp in the base image already; stated so the boto3/onnxruntime
+# lookups under ~ cannot land on a read-only path after a base-image change.
+ENV PATH=/opt/venv/bin:$PATH \
+    HOME=/tmp \
+    PORT=8083 \
+    MODEL=df_default_2.0.1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
-# Copy requirements first for better Docker cache
-COPY requirements.txt .
-
-# Pinned build-tooling versions keep the image reproducible; override with
-# --build-arg if a newer patched release is needed. These pins clear the
-# pip / setuptools / wheel CVE scan findings (setuptools 84 also vendors the
-# patched jaraco.context 6.1 + wheel 0.46.3 under setuptools/_vendor/).
-ARG PIP_VERSION=26.2.1
-ARG SETUPTOOLS_VERSION=84.2.1
-ARG WHEEL_VERSION=0.47.0
-# Upgrade build tooling (fixes pip / setuptools / wheel CVEs) and install deps.
-# The installs stay &&-gated so any failure fails the build; the final cleanup
-# (best-effort block, ends in `true` so it never fails the build) purges:
-#   1. the ensurepip _bundled wheels + pip cache the base image ships; and
-#   2. as a safety net, any pre-patch vendored wheel/jaraco.context .dist-info
-#      left under setuptools/_vendor/ if the base image's setuptools couldn't be
-#      cleanly uninstalled. Normally a no-op — 83.0.0 already vendors the patched
-#      wheel 0.46.3 + jaraco.context 6.1.0, which the version-scoped match spares.
-RUN pip install --no-cache-dir --upgrade "pip==${PIP_VERSION}" "setuptools==${SETUPTOOLS_VERSION}" "wheel==${WHEEL_VERSION}" && \
-    pip install --no-cache-dir -r requirements.txt && \
-    { \
-        find /usr/local/lib -type d -name "_bundled" -path "*ensurepip*" -exec rm -rf {} + 2>/dev/null; \
-        find /usr/local/lib -type d -path "*/setuptools/_vendor/*" \
-            \( -name "wheel-0.4[0-5]*" -o -name "jaraco.context-[0-5]*" -o -name "jaraco_context-[0-5]*" \) \
-            -exec rm -rf {} + 2>/dev/null; \
-        rm -rf /root/.cache/pip; \
-        true; \
-    }
-
-# Copy source code
+COPY --from=build /opt/venv /opt/venv
+# Source is root-owned, read-only for the app user.
 COPY src/ ./src/
 COPY main.py .
+# The model download cache (./checkpoints, relative to /app) is the only path
+# the app writes. Owned by the runtime user so a named volume mounted there
+# inherits that ownership.
+COPY --from=build --chown=65532:65532 /out/checkpoints /app/checkpoints
 
-# Create checkpoints directory for model cache
-# Unprivileged runtime user; it may only write the model download cache.
-RUN groupadd --system --gid 10001 app \
-    && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/checkpoints \
-    && chown app:app /app/checkpoints
-
-# Set file permissions (read-only for security)
-RUN chmod 444 main.py
-RUN chmod 444 requirements.txt
-
-# Environment variables
-ENV PORT=8083
-ENV MODEL=df_default_2.0.1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-
-# Expose port (matches gunicorn's $PORT binding below)
 EXPOSE 8083
 
-# Health check
+# Exec form: the runtime image has no shell. Any HTTP error fails the check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import os, requests; requests.get(f\"http://localhost:{os.environ['PORT']}/\", timeout=5).raise_for_status()" || exit 1
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen('http://localhost:%s/' % os.environ['PORT'], timeout=5)"]
 
-USER app
+# The image default (65532), stated explicitly so a base-image change cannot
+# silently make the server run as root.
+USER 65532
 
-# Run with gunicorn
-CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 900 --access-logfile - --error-logfile - main:app"]
+# No --bind: with PORT set, gunicorn binds 0.0.0.0:$PORT by default. Exec form
+# does no variable expansion, so this is how $PORT is honoured without a shell.
+CMD ["gunicorn", "--workers", "1", "--threads", "4", "--timeout", "900", "--access-logfile", "-", "--error-logfile", "-", "main:app"]
