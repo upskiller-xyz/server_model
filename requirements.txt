@@ -12,7 +12,9 @@ requests>=2.32.0
 
 # Image Processing
 Pillow>=12.0.0
-opencv-python>=4.12.0.88
+# Headless build: no Qt/GUI, so it needs no libGL/libX* at runtime (the
+# distroless runtime image has none). The code only processes image arrays.
+opencv-python-headless>=4.12.0.88
 
 # NumPy (required by ONNX Runtime) — 2.x: numpy 1.x has no Python 3.14 wheels
 numpy>=2.3.3,<3.0.0
