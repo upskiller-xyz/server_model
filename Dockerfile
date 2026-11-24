@@ -13,7 +13,7 @@
 # libraries they need. Modal does not use this file; it has its own image
 # definition in modal_app/image.py.
 
-FROM registry.access.redhat.com/hi/python:3.14-builder@sha256:b7ae4033035309fb6e1c6e9d2efa3b7d53bee243fdafe3ca13da4c782110ce54 AS build
+FROM registry.access.redhat.com/hi/python:3.14-builder@sha256:81770535a4e7798add36b44a51f2d96693a3a993b666a17c15b9fe795defb6f0 AS build
 
 # The builder image runs as 65532 too; installing into /opt needs root.
 USER 0
@@ -25,7 +25,7 @@ RUN /opt/venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt \
     && /opt/venv/bin/pip uninstall --yes pip \
     && mkdir -p /out/checkpoints
 
-FROM registry.access.redhat.com/hi/python:3.14@sha256:1ac4921724237d985a35cc23bbcd779fd5b984089e039182bf8e22cd108490d6
+FROM registry.access.redhat.com/hi/python:3.14@sha256:1712615cc71c2801da3ec9f86381d7e6bebd822ff0fec7ea3a865d36b81039ed
 
 WORKDIR /app
 # HOME is /tmp in the base image already; stated so the boto3/onnxruntime
